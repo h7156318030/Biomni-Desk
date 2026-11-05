@@ -1,0 +1,486 @@
+{
+  "version": 1,
+  "note": "Fixed questions for the answer-quality benchmark. facts: each inner list passes if any of its strings appears in the answer.",
+  "questions": [
+    {
+      "id": "q01",
+      "category": "数据库",
+      "question": "查 TP53 的 gnomAD 约束指标，pLI 和 LOEUF 分别是多少？",
+      "tools": [
+        "gnomad_constraint"
+      ],
+      "facts": [
+        [
+          "0.418"
+        ],
+        [
+          "1.000",
+          "1.0"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q02",
+      "category": "数据库",
+      "question": "TP53 蛋白的 UniProt 登录号和氨基酸长度是多少？",
+      "tools": [
+        "uniprot_lookup"
+      ],
+      "facts": [
+        [
+          "P04637"
+        ],
+        [
+          "393"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q03",
+      "category": "数据库",
+      "question": "TP53 的中央 DNA 结合域在 UniProt 上标注的起止位置是多少？",
+      "tools": [
+        "uniprot_lookup"
+      ],
+      "facts": [
+        [
+          "102"
+        ],
+        [
+          "292"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q04",
+      "category": "数据库",
+      "question": "TP53 四聚化域的起止位置是多少？请注明数据来源。",
+      "tools": [
+        "query_interpro",
+        "uniprot_lookup"
+      ],
+      "facts": [
+        [
+          "325",
+          "319"
+        ],
+        [
+          "356",
+          "357"
+        ]
+      ],
+      "must_source": true
+    },
+    {
+      "id": "q05",
+      "category": "数据库",
+      "question": "KRAS 在 Open Targets 的成药性标记下有几个已知药物或临床候选？",
+      "tools": [
+        "target_tractability",
+        "open_targets"
+      ],
+      "facts": [
+        [
+          "3 个",
+          "3个"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q06",
+      "category": "数据库",
+      "question": "EGFR 的成药性怎样？Open Targets 上有多少已知药物或临床候选？",
+      "tools": [
+        "target_tractability"
+      ],
+      "facts": [
+        [
+          "82"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q07",
+      "category": "数据库",
+      "question": "TP53 在 GTEx 中哪类组织的表达中位数最高？",
+      "tools": [
+        "gtex_expression"
+      ],
+      "facts": [
+        [
+          "EBV",
+          "淋巴",
+          "lymphocyte"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q08",
+      "category": "数据库",
+      "question": "列出 TP53 的几个高置信互作蛋白（STRING）。",
+      "tools": [
+        "string_interactions"
+      ],
+      "facts": [
+        [
+          "SIRT1"
+        ],
+        [
+          "MAPK1",
+          "AURKA",
+          "CSNK2A1",
+          "STUB1",
+          "DDX5"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q09",
+      "category": "数据库",
+      "question": "TP53 参与哪些 Reactome 通路？",
+      "tools": [
+        "reactome_pathways"
+      ],
+      "facts": [
+        [
+          "Regulation of TP53"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q10",
+      "category": "数据库",
+      "question": "EGFR 在 CIViC 数据库中已整理的变异有多少个？",
+      "tools": [
+        "civic_gene_variants"
+      ],
+      "facts": [
+        [
+          "322"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q11",
+      "category": "数据库",
+      "question": "阿司匹林在 FAERS 不良事件报告中最常见的不良反应是什么？",
+      "tools": [
+        "fda_adverse_events"
+      ],
+      "facts": [
+        [
+          "FATIGUE",
+          "疲劳"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q12",
+      "category": "数据库",
+      "question": "EGFR 靶点上活性最强的化合物，IC50 大约是多少？",
+      "tools": [
+        "chembl_target_compounds"
+      ],
+      "facts": [
+        [
+          "nM"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q13",
+      "category": "文献",
+      "question": "sotorasib 是哪一年获得 FDA 批准的？请给出来源。",
+      "tools": [],
+      "facts": [
+        [
+          "2021"
+        ]
+      ],
+      "must_source": true
+    },
+    {
+      "id": "q14",
+      "category": "文献",
+      "question": "给出一篇关于 KRAS G12C 抑制剂获得性耐药的代表性论文，写出 PMID。",
+      "tools": [
+        "pubmed_search",
+        "europepmc_search",
+        "paper_abstracts"
+      ],
+      "facts": [
+        [
+          "34161704"
+        ]
+      ],
+      "must_source": true
+    },
+    {
+      "id": "q15",
+      "category": "文献",
+      "question": "sotorasib 联合 panitumumab 治疗结直肠癌的关键临床试验叫什么？",
+      "tools": [],
+      "facts": [
+        [
+          "CodeBreaK 300",
+          "CodeBreaK300"
+        ]
+      ],
+      "must_source": true
+    },
+    {
+      "id": "q16",
+      "category": "文献",
+      "question": "TP53 最常见的几个肿瘤热点密码子有哪些？请给出来源。",
+      "tools": [],
+      "facts": [
+        [
+          "R175"
+        ],
+        [
+          "R248"
+        ],
+        [
+          "R273"
+        ]
+      ],
+      "must_source": true
+    },
+    {
+      "id": "q17",
+      "category": "文献",
+      "question": "列出两篇讨论 TP53 热点突变的综述或研究论文，附 DOI 或 PMID。",
+      "tools": [
+        "pubmed_search",
+        "europepmc_search"
+      ],
+      "facts": [
+        [
+          "PMID",
+          "DOI",
+          "10."
+        ]
+      ],
+      "must_source": true
+    },
+    {
+      "id": "q18",
+      "category": "文献",
+      "question": "PMID 34161704 这篇论文的标题是什么？",
+      "tools": [
+        "paper_abstracts",
+        "pubmed_search",
+        "europepmc_search"
+      ],
+      "facts": [
+        [
+          "Acquired Resistance",
+          "获得性耐药"
+        ]
+      ],
+      "must_source": true
+    },
+    {
+      "id": "q19",
+      "category": "方法",
+      "question": "单细胞数据做细胞类型注释时，推荐怎样做？",
+      "tools": [],
+      "facts": [
+        [
+          "标记基因",
+          "marker"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q20",
+      "category": "方法",
+      "question": "单细胞差异表达分析为什么常用 pseudobulk？",
+      "tools": [],
+      "facts": [
+        [
+          "pseudobulk",
+          "伪批量",
+          "假批量"
+        ],
+        [
+          "样本"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q21",
+      "category": "环境",
+      "question": "本机能直接运行 Seurat 吗？",
+      "tools": [],
+      "facts": [
+        [
+          "没有 R",
+          "没有R",
+          "未安装",
+          "不能运行",
+          "无法运行",
+          "不可用"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q22",
+      "category": "环境",
+      "question": "本机能用 Python 做单细胞质控吗？可以用哪个包？",
+      "tools": [],
+      "facts": [
+        [
+          "scanpy"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q23",
+      "category": "方法",
+      "question": "单细胞质控通常看哪些指标？",
+      "tools": [],
+      "facts": [
+        [
+          "线粒体",
+          "mito"
+        ],
+        [
+          "UMI",
+          "基因数",
+          "genes"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q24",
+      "category": "基础",
+      "question": "阿司匹林的分子式是什么？",
+      "tools": [],
+      "facts": [
+        [
+          "C9H8O4",
+          "C₉H₈O₄"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q25",
+      "category": "计算",
+      "question": "用 10 mM 储液配制 1 mL 100 μM 工作液，需要多少微升储液？",
+      "tools": [],
+      "facts": [
+        [
+          "10 μL",
+          "10μL",
+          "10 µL",
+          "10 微升",
+          "10 μl",
+          "10ul",
+          "10 ul"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q26",
+      "category": "计算",
+      "question": "100 mg/mL 储液稀释成 1 mg/mL，要做 1 mL 工作液，需要多少微升储液？",
+      "tools": [],
+      "facts": [
+        [
+          "10 μL",
+          "10μL",
+          "10 µL",
+          "10 微升",
+          "10 μl",
+          "10ul",
+          "10 ul"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q27",
+      "category": "基础",
+      "question": "TP53 基因位于人类的哪条染色体的什么位置？",
+      "tools": [],
+      "facts": [
+        [
+          "17p13",
+          "17 号染色体",
+          "17号染色体",
+          "chromosome 17"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q28",
+      "category": "基础",
+      "question": "BRCA1 的主要生物学功能是什么？",
+      "tools": [],
+      "facts": [
+        [
+          "DNA 修复",
+          "DNA repair",
+          "同源重组",
+          "homologous"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q29",
+      "category": "统计",
+      "question": "两组样本量很小时，为什么 t 检验的结论可能不可靠？",
+      "tools": [],
+      "facts": [
+        [
+          "正态",
+          "normal"
+        ],
+        [
+          "样本量",
+          "sample size",
+          "小样本"
+        ]
+      ],
+      "must_source": false
+    },
+    {
+      "id": "q30",
+      "category": "数据库",
+      "question": "TP53 的突变在癌症中以错义突变为主吗？请用数据库或文献证据回答。",
+      "tools": [
+        "pubmed_search",
+        "europepmc_search",
+        "gnomad_constraint"
+      ],
+      "facts": [
+        [
+          "错义",
+          "missense"
+        ]
+      ],
+      "must_source": true
+    }
+  ]
+}

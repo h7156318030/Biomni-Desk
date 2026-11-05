@@ -1,0 +1,192 @@
+@import "tailwindcss";
+
+/* Design tokens: a quiet lab notebook. Warm neutral paper, ink text, one green accent. Our own design. */
+:root {
+  --paper: #f4f2ec;
+  --panel: #faf9f6;
+  --card: #ffffff;
+  --line: #e6e2d8;
+  --line-strong: #d6d0c1;
+  --ink: #1e1c17;
+  --ink-soft: #6a6555;
+  --accent: #2b6b5a;
+  --accent-strong: #225646;
+  --accent-soft: #e0eee8;
+  --warn: #b4552b;
+  --code-bg: #efece4;
+  --ring: rgb(43 107 90 / 0.22);
+  --shadow-sm: 0 1px 2px rgb(30 28 23 / 0.05);
+  --shadow-md: 0 4px 14px -2px rgb(30 28 23 / 0.10), 0 2px 4px rgb(30 28 23 / 0.04);
+  --shadow-lg: 0 18px 40px -12px rgb(30 28 23 / 0.22);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-appearance="light"]) {
+    --paper: #131310;
+    --panel: #1a1a15;
+    --card: #21211b;
+    --line: #333229;
+    --line-strong: #46443a;
+    --ink: #eeeadf;
+    --ink-soft: #a8a290;
+    --accent: #79c5aa;
+    --accent-strong: #8fd3bb;
+    --accent-soft: #1f3329;
+    --warn: #e6935f;
+    --code-bg: #191913;
+    --ring: rgb(121 197 170 / 0.28);
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+    --shadow-md: 0 4px 14px -2px rgb(0 0 0 / 0.45);
+    --shadow-lg: 0 18px 40px -12px rgb(0 0 0 / 0.6);
+  }
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-panel: var(--panel);
+  --color-card: var(--card);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-soft: var(--ink-soft);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-warn: var(--warn);
+  --color-codebg: var(--code-bg);
+  /* One family for everything. "font-serif" is still used on headings in the code; it now means "display weight". */
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Noto Sans SC", system-ui, sans-serif;
+  --font-serif: "Segoe UI Variable Display", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Noto Sans SC", system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+}
+
+html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.65;
+  letter-spacing: 0.005em;
+}
+
+/* Headings: display weight, tight. */
+h1, h2, h3, .font-serif { letter-spacing: -0.012em; }
+h1.font-serif, h2.font-serif { font-weight: 650; }
+
+::selection { background: var(--accent-soft); color: var(--ink); }
+
+/* Quiet, thin scrollbars */
+* { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--ink-soft); background-clip: content-box; border: 2px solid transparent; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* Controls: everything eases, nothing jumps */
+button, a, input, textarea, select, summary, [role="button"] {
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease, box-shadow 0.14s ease, opacity 0.14s ease, transform 0.14s ease;
+}
+button:not(:disabled), summary, [role="button"] { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+button.bg-accent:hover:not(:disabled) { background: var(--accent-strong); }
+button:active:not(:disabled) { transform: translateY(0.5px); }
+
+input, textarea, select { font-family: inherit; }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+input:not([type="checkbox"]):not([type="radio"]):focus, select:focus { box-shadow: 0 0 0 3px var(--ring); }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
+
+/* Cards and panels: a hairline and a soft shadow instead of a flat outline */
+.rounded-xl.border, .rounded-2xl.border { box-shadow: var(--shadow-sm); }
+button.rounded-xl.border:hover, a.rounded-xl.border:hover, [role="button"].rounded-xl.border:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+[role="dialog"], [role="menu"], [role="listbox"] { box-shadow: var(--shadow-lg); }
+
+/* The composer is the centre of the page: give it presence, and a glow while typing */
+.rounded-2xl.border.bg-card.p-3 { box-shadow: var(--shadow-md); }
+.rounded-2xl.border.bg-card.p-3:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px var(--ring), var(--shadow-md); }
+
+/* Rendered markdown (answers) */
+.md { font-size: 15.5px; line-height: 1.8; }
+.md > :first-child { margin-top: 0; }
+.md p { margin: 0.65em 0; }
+.md ul, .md ol { margin: 0.6em 0; padding-left: 1.5em; }
+.md li { margin: 0.25em 0; }
+.md ul { list-style: disc; }
+.md ol { list-style: decimal; }
+.md li::marker { color: var(--ink-soft); }
+.md h1, .md h2, .md h3 { font-family: var(--font-serif); font-weight: 650; line-height: 1.35; margin: 1.3em 0 0.45em; letter-spacing: -0.012em; }
+.md h1 { font-size: 1.3em; } .md h2 { font-size: 1.16em; } .md h3 { font-size: 1.04em; }
+.md h2 { padding-bottom: 0.25em; border-bottom: 1px solid var(--line); }
+.md strong { font-weight: 650; }
+.md blockquote { margin: 0.8em 0; padding: 0.1em 1em; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0; color: var(--ink); }
+.md hr { border: 0; border-top: 1px solid var(--line); margin: 1.4em 0; }
+.md code { font-family: var(--font-mono); font-size: 0.87em; background: var(--code-bg); padding: 0.12em 0.4em; border-radius: 5px; }
+.md pre { background: var(--code-bg); padding: 0.9em 1.1em; border-radius: 10px; overflow-x: auto; border: 1px solid var(--line); }
+.md pre code { background: none; padding: 0; }
+.md table { display: block; width: max-content; max-width: 100%; overflow-x: auto; border-collapse: separate; border-spacing: 0; margin: 0.9em 0; font-size: 0.93em; border: 1px solid var(--line); border-radius: 10px; }
+/* a column never shrinks into a sliver: long text wraps at a readable width, the table scrolls sideways instead */
+.md th, .md td { min-width: 6.5em; max-width: 30em; vertical-align: top; }
+.md td:first-child, .md th:first-child { min-width: 3.5em; }
+.md th { background: var(--code-bg); font-weight: 650; text-align: left; }
+.md th, .md td { padding: 0.5em 0.8em; border-bottom: 1px solid var(--line); }
+.md tr:last-child td { border-bottom: 0; }
+.md tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--code-bg) 45%, transparent); }
+.md a { color: var(--accent); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset: 3px; }
+.md a:hover { text-decoration-color: var(--accent); }
+
+@keyframes pulse-dot { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+.pulse { animation: pulse-dot 1.2s ease-in-out infinite; }
+
+/* Code colours (Python) used in the working trace */
+:root {
+  --tok-comment: #8a8474;
+  --tok-string: #8a5a1f;
+  --tok-keyword: #2b6b5a;
+  --tok-builtin: #3b6aa0;
+  --tok-number: #b4552b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-appearance="light"]) {
+    --tok-comment: #8d8774;
+    --tok-string: #e0b36f;
+    --tok-keyword: #79c5aa;
+    --tok-builtin: #8db4e6;
+    --tok-number: #e6935f;
+  }
+}
+.tok-comment { color: var(--tok-comment); font-style: italic; }
+.tok-string { color: var(--tok-string); }
+.tok-keyword { color: var(--tok-keyword); font-weight: 600; }
+.tok-builtin { color: var(--tok-builtin); }
+.tok-number { color: var(--tok-number); }
+
+/* Printing / saving as PDF: only the answer that asked for it */
+@media print {
+  body * { visibility: hidden !important; }
+  .print-answer, .print-answer * { visibility: visible !important; }
+  .print-answer { position: absolute; left: 0; top: 0; width: 100%; }
+  .print-answer button, .print-answer details { display: none !important; }
+}
+
+/* Keyboard focus is always visible; motion is switched off for people who ask for that */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+textarea:focus-visible, input:focus-visible { outline: none; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
+}
+
+/* A result's source step blinks once when "view source" jumps to it */
+@keyframes flash { 0% { background: var(--accent-soft); } 100% { background: transparent; } }
+.flash { animation: flash 1.8s ease-out; border-radius: 0.5rem; }
+
+/* Appearance chosen in settings: always dark / always light (the media query above covers "follow the system") */
+:root[data-appearance="dark"] {
+  --paper: #131310; --panel: #1a1a15; --card: #21211b; --line: #333229; --line-strong: #46443a; --ink: #eeeadf; --ink-soft: #a8a290;
+  --accent: #79c5aa; --accent-strong: #8fd3bb; --accent-soft: #1f3329; --warn: #e6935f; --code-bg: #191913;
+  --ring: rgb(121 197 170 / 0.28);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3); --shadow-md: 0 4px 14px -2px rgb(0 0 0 / 0.45); --shadow-lg: 0 18px 40px -12px rgb(0 0 0 / 0.6);
+  --tok-comment: #8d8774; --tok-string: #e0b36f; --tok-keyword: #79c5aa; --tok-builtin: #8db4e6; --tok-number: #e6935f;
+}
+/* Style chosen in settings: "modern" = softer borders instead of the strong classic ones */
+:root[data-style="modern"] { --line: color-mix(in srgb, var(--ink) 14%, var(--paper)); }
+:root[data-style="modern"] .rounded-xl, :root[data-style="modern"] .rounded-lg { box-shadow: var(--shadow-sm); }

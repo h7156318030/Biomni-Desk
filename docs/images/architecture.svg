@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="560" viewBox="0 0 960 560" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b62"/>
+    </marker>
+  </defs>
+  <rect width="960" height="560" fill="#faf9f6"/>
+  <text x="480" y="38" text-anchor="middle" font-size="22" font-weight="600" fill="#1e1c17">How Biomni-Lite fits together</text>
+  <text x="480" y="62" text-anchor="middle" font-size="13" fill="#5b6b62">Everything runs on your own computer; only model and database requests leave it.</text>
+
+  <!-- Row 1: user -> web -> backend -> agent -->
+  <rect x="30" y="100" width="190" height="96" rx="12" fill="#ffffff" stroke="#2f6b57" stroke-width="2"/>
+  <text x="125" y="132" text-anchor="middle" font-size="16" font-weight="600" fill="#1e1c17">You</text>
+  <text x="125" y="156" text-anchor="middle" font-size="12" fill="#5b6b62">Browser at</text>
+  <text x="125" y="174" text-anchor="middle" font-size="12" fill="#5b6b62">localhost:3001</text>
+
+  <rect x="260" y="100" width="210" height="96" rx="12" fill="#ffffff" stroke="#2f6b57" stroke-width="2"/>
+  <text x="365" y="132" text-anchor="middle" font-size="16" font-weight="600" fill="#1e1c17">Web interface</text>
+  <text x="365" y="156" text-anchor="middle" font-size="12" fill="#5b6b62">Next.js, English and 中文</text>
+  <text x="365" y="174" text-anchor="middle" font-size="12" fill="#5b6b62">projects, plans, results</text>
+
+  <rect x="510" y="100" width="210" height="96" rx="12" fill="#ffffff" stroke="#2f6b57" stroke-width="2"/>
+  <text x="615" y="132" text-anchor="middle" font-size="16" font-weight="600" fill="#1e1c17">Backend API</text>
+  <text x="615" y="156" text-anchor="middle" font-size="12" fill="#5b6b62">FastAPI on port 8765</text>
+  <text x="615" y="174" text-anchor="middle" font-size="12" fill="#5b6b62">tasks, settings, history</text>
+
+  <rect x="760" y="100" width="170" height="96" rx="12" fill="#e7f1ec" stroke="#2f6b57" stroke-width="2"/>
+  <text x="845" y="132" text-anchor="middle" font-size="16" font-weight="600" fill="#1e1c17">Agent</text>
+  <text x="845" y="156" text-anchor="middle" font-size="12" fill="#5b6b62">plans, calls tools,</text>
+  <text x="845" y="174" text-anchor="middle" font-size="12" fill="#5b6b62">writes the answer</text>
+
+  <line x1="220" y1="148" x2="258" y2="148" stroke="#5b6b62" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="470" y1="148" x2="508" y2="148" stroke="#5b6b62" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="720" y1="148" x2="758" y2="148" stroke="#5b6b62" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Row 2: agent to tools, skills and model -->
+  <rect x="30" y="268" width="280" height="150" rx="12" fill="#ffffff" stroke="#8a9a91" stroke-width="1.5"/>
+  <text x="170" y="298" text-anchor="middle" font-size="16" font-weight="600" fill="#1e1c17">Tools (225 bundled)</text>
+  <text x="170" y="322" text-anchor="middle" font-size="12" fill="#5b6b62">Databases: ClinicalTrials.gov, ChEMBL,</text>
+  <text x="170" y="339" text-anchor="middle" font-size="12" fill="#5b6b62">Open Targets, UniProt, gnomAD, GEO, GTEx</text>
+  <text x="170" y="360" text-anchor="middle" font-size="12" fill="#5b6b62">Literature: PubMed, Europe PMC, ORCID</text>
+  <text x="170" y="381" text-anchor="middle" font-size="12" fill="#5b6b62">Analysis: DESeq2, scanpy, survival, primers</text>
+  <text x="170" y="402" text-anchor="middle" font-size="12" fill="#5b6b62">Web search, PDF and web page reader</text>
+
+  <rect x="340" y="268" width="280" height="150" rx="12" fill="#ffffff" stroke="#8a9a91" stroke-width="1.5"/>
+  <text x="480" y="298" text-anchor="middle" font-size="16" font-weight="600" fill="#1e1c17">Skills (98 built-in)</text>
+  <text x="480" y="322" text-anchor="middle" font-size="12" fill="#5b6b62">Step-by-step manuals for analyses,</text>
+  <text x="480" y="339" text-anchor="middle" font-size="12" fill="#5b6b62">each with when to use it, when not to,</text>
+  <text x="480" y="356" text-anchor="middle" font-size="12" fill="#5b6b62">the tools it needs and the output rules.</text>
+  <text x="480" y="384" text-anchor="middle" font-size="12" fill="#5b6b62">Loaded only when a question needs them.</text>
+
+  <rect x="650" y="268" width="280" height="150" rx="12" fill="#ffffff" stroke="#8a9a91" stroke-width="1.5"/>
+  <text x="790" y="298" text-anchor="middle" font-size="16" font-weight="600" fill="#1e1c17">Model (your choice)</text>
+  <text x="790" y="322" text-anchor="middle" font-size="12" fill="#5b6b62">ChatGPT subscription (log in inside</text>
+  <text x="790" y="339" text-anchor="middle" font-size="12" fill="#5b6b62">the app), or any OpenAI-compatible</text>
+  <text x="790" y="356" text-anchor="middle" font-size="12" fill="#5b6b62">service: OpenRouter, DeepSeek, Kimi,</text>
+  <text x="790" y="373" text-anchor="middle" font-size="12" fill="#5b6b62">Qwen, local Ollama or LM Studio</text>
+
+  <line x1="805" y1="196" x2="790" y2="266" stroke="#5b6b62" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="700" y1="196" x2="480" y2="266" stroke="#5b6b62" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="800" y1="196" x2="170" y2="266" stroke="#8a9a91" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+
+  <!-- Row 3: storage -->
+  <rect x="30" y="456" width="900" height="72" rx="12" fill="#f1efe8" stroke="#c9c4b5" stroke-width="1.5"/>
+  <text x="480" y="486" text-anchor="middle" font-size="15" font-weight="600" fill="#1e1c17">Stored only on your computer: ui_data/</text>
+  <text x="480" y="510" text-anchor="middle" font-size="12" fill="#5b6b62">conversations, results, settings, model keys and your ChatGPT login. Nothing is sent to the authors.</text>
+</svg>

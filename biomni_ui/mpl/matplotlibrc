@@ -1,0 +1,4 @@
+# charts the agent draws in the shell tool: Chinese labels need a CJK font, otherwise they come out as boxes
+font.family: sans-serif
+font.sans-serif: Microsoft YaHei, SimHei, Noto Sans CJK SC, PingFang SC, DejaVu Sans
+axes.unicode_minus: False

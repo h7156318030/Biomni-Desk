@@ -1,0 +1,62 @@
+services:
+  biomni-lite:
+    build: .
+    image: biomni-lite:latest
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - BIOMNI_PATH=/workspace/data
+      - BIOMNI_LLM=${BIOMNI_LLM:-claude-opus-4-5}
+      - BIOMNI_AGENT=${BIOMNI_AGENT:-}
+      - BIOMNI_USE_TOOL_RETRIEVER=${BIOMNI_USE_TOOL_RETRIEVER:-false}
+      - GRADIO_ANALYTICS_ENABLED=False
+      - PYTHONUNBUFFERED=1
+      # For VPN/corporate networks with SSL inspection, mount your CA bundle:
+      - SSL_CERT_FILE=${SSL_CERT_FILE:-}
+      - REQUESTS_CA_BUNDLE=${REQUESTS_CA_BUNDLE:-}
+      - HTTPX_SSL_VERIFY=${HTTPX_SSL_VERIFY:-}
+    volumes:
+      # Persist downloaded data lake files and run outputs across container restarts
+      - biomni_data:/workspace/data
+      # Mount local workspace for custom scripts and results
+      - ./workspace:/workspace/runs
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+
+  biomni-lite-gradio:
+    build: .
+    image: biomni-lite:latest
+    command: python /app/serve.py
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - BIOMNI_PATH=/workspace/data
+      - BIOMNI_LLM=${BIOMNI_LLM:-claude-opus-4-5}
+      - BIOMNI_AGENT=${BIOMNI_AGENT:-}
+      - BIOMNI_USE_TOOL_RETRIEVER=${BIOMNI_USE_TOOL_RETRIEVER:-false}
+      - GRADIO_ANALYTICS_ENABLED=False
+      - PYTHONUNBUFFERED=1
+      # For VPN/corporate networks with SSL inspection, mount your CA bundle:
+      - SSL_CERT_FILE=${SSL_CERT_FILE:-}
+      - REQUESTS_CA_BUNDLE=${REQUESTS_CA_BUNDLE:-}
+      - HTTPX_SSL_VERIFY=${HTTPX_SSL_VERIFY:-}
+    volumes:
+      - biomni_data:/workspace/data
+      - ./workspace:/workspace/runs
+    ports:
+      - "${GRADIO_PORT:-7860}:7860"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  biomni_data:

@@ -1,0 +1,104 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "biomni-lite"
+version = "0.1.0"
+description = "Biomni-Lite: A lightweight biomedical AI agent powered by strong LLMs, no local data lake required"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [
+    {name = "Biomni Team", email = "kexinh@cs.stanford.edu"}
+]
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic",
+    "langchain",
+    "langchain-core",
+    "langgraph",
+    "langchain-anthropic",
+    "python-dotenv",
+    "requests",
+    "pandas",
+    "tqdm",
+    "biopython",
+    "beautifulsoup4",
+    "googlesearch-python",
+    "PyPDF2",
+    "numpy",
+    "matplotlib",
+]
+
+[project.urls]
+Homepage = "https://github.com/snap-stanford/biomni"
+Repository = "https://github.com/snap-stanford/biomni"
+
+[project.optional-dependencies]
+openai = ["langchain-openai"]
+ollama = ["langchain-ollama"]
+aws = ["langchain-aws"]
+gradio = ["gradio>=5.0,<6.0"]
+mcp = ["mcp", "nest-asyncio", "pyyaml"]
+all = [
+    "langchain-openai",
+    "langchain-ollama",
+    "langchain-aws",
+    "gradio>=5.0,<6.0",
+    "mcp",
+    "nest-asyncio",
+    "pyyaml",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+exclude = ["test*", "tutorials*", "docs*"]
+
+[tool.ruff]
+src = ["src"]
+line-length = 120
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint]
+select = [
+    "F",
+    "E",
+    "W",
+    "I",
+    "B",
+    "TID",
+    "C4",
+    "BLE",
+    "UP",
+    "RUF100",
+    "TCH",
+]
+ignore = [
+    "E501",
+    "E731",
+    "E741",
+    "D104",
+    "D100",
+    "D107",
+    "B008",
+    "D105",
+    "D400",
+    "D401",
+    "D203",
+    "D213",
+    "N813",
+    "E402",
+    "PLR0913",
+    "PLR0912",
+    "PLR2004",
+    "PLR0915",
+    "PLC0206",
+    "PLC0415",
+    "BLE001",
+    "B005"
+]

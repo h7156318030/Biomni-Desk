@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Data and outputs
+data/
+runs/
+workspace/
+*.parquet
+*.pkl
+*.csv
+*.tsv
+*.h5
+*.h5ad
+*tar
+*tar.gz
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Logs
+*.log
+
+# Docker
+workspace/
+
+# LLM Agent metadata
+.claude/
+.cursor/
