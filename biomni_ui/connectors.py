@@ -32,6 +32,7 @@ GROUPS: tuple[dict[str, Any], ...] = (
     {"id": "pdb", "title": "PDB structures and AlphaFold DB predictions", "tools": ("pdb_structures", "alphafold_structure")},
     {"id": "pubchem", "title": "PubChem compounds", "tools": ("pubchem_compound",)},
     {"id": "openalex", "title": "OpenAlex scholarly works", "tools": ("openalex_works",)},
+    {"id": "dgidb", "title": "DGIdb drug-gene interactions", "tools": ("dgidb_interactions",)},
 )
 STORE = Path(__file__).resolve().parent.parent / "ui_data" / "connectors.json"
 _lock = threading.Lock()
@@ -68,12 +69,29 @@ def off_message(tool: str) -> str:
 
 def refusal_message(title: str) -> str:
     """What a database call returns when the user did not allow it for this request."""
-    return f"The database “{title}” was not queried: the user did not allow it for this request. Carry on without it, or say what is missing."
+    return (f"The database “{title}” was not queried: it is not allowed for this task. (A database can be allowed for automatic tasks in "
+            "Settings → Databases.) Carry on without it, or say what is missing. Do not reach the same service another way (no curl, no scripts "
+            "to its address, no web search for the same data): the refusal stands.")
 
 
 def listing() -> list[dict[str, Any]]:
+    from biomni_ui import permissions
+
     off = _disabled()
-    return [{"id": g["id"], "title": g["title"], "tools": list(g["tools"]), "enabled": g["id"] not in off} for g in GROUPS]
+    return [{"id": g["id"], "title": g["title"], "tools": list(g["tools"]), "enabled": g["id"] not in off,
+             "always": all(permissions.everywhere(t) for t in g["tools"])} for g in GROUPS]
+
+
+def set_always(group_id: str, on: bool) -> bool:
+    """Allow (or stop allowing) every tool of a connector in all tasks, automatic ones included. False when there is no such connector."""
+    from biomni_ui import permissions
+
+    group = next((g for g in GROUPS if g["id"] == group_id), None)
+    if group is None:
+        return False
+    for t in group["tools"]:
+        permissions.set_everywhere(t, on)
+    return True
 
 
 def set_enabled(group_id: str, on: bool) -> bool:

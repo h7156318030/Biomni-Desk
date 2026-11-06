@@ -153,12 +153,12 @@ class KernelPath(Isolated):
         guarded = connectors._guarded("uniprot_lookup", lambda: "CALLED")
         with mock.patch.dict("os.environ", {"BIOMNI_KERNEL_SESSION": "conv-g"}):
             self.serve_in_background("conv-g", lambda tool: "deny")
-            self.assertIn("did not allow", guarded())
+            self.assertIn("not allowed for this task", guarded())
         self.serve_in_background("conv-h", lambda tool: "allow")
         with mock.patch.dict("os.environ", {"BIOMNI_KERNEL_SESSION": "conv-h"}):
             self.assertEqual(guarded(), "CALLED")
         with mock.patch.dict("os.environ", {"BIOMNI_KERNEL_SESSION": ""}):  # a session without an id is refused
-            self.assertIn("did not allow", guarded())
+            self.assertIn("not allowed for this task", guarded())
         self.assertEqual(guarded(), "CALLED")  # outside any kernel the guard only checks the switch, as before
 
 
@@ -187,7 +187,7 @@ class GatedInTheLoop(Isolated):
                                                      emit=lambda e: None, cancel=lambda: False, cwd=Path(d), call=fake, allow_ask=False,
                                                      permit=lambda tool, cid: "deny")
         outs = [str(i.get("output")) for i in items if i.get("type") == "function_call_output"]
-        self.assertTrue(any("did not allow" in o for o in outs))
+        self.assertTrue(any("not allowed for this task" in o for o in outs))
         self.assertEqual(calls, [])  # the connector was not called
 
     def test_an_allowed_connector_runs(self):

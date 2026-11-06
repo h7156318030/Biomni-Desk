@@ -396,7 +396,10 @@ export type Prefs = {
 export type PrefsView = { profile: Profile; prefs: Prefs; areas: string[] };
 export const getPrefs = () => get<PrefsView>("/api/prefs");
 
-export type Connector = { id: string; title: string; tools: string[]; enabled: boolean };
+/** always: allowed in every task, automatic ones included (automatic tasks cannot ask, so this is the consent they need). */
+export type Connector = { id: string; title: string; tools: string[]; enabled: boolean; always: boolean };
+export const setConnectorAlways = (id: string, allowed: boolean) =>
+  send<{ connectors: Connector[] }>("PUT", `/api/connectors/${id}/always`, { allowed });
 /** source: you (typed by you), agent (proposed by the agent during a task), auto (suggested after a finished task). */
 export type MemoryNote = { id: string; text: string; created: number; status: "approved" | "proposed"; project_id: string | null; category: string; source: "you" | "agent" | "auto" };
 export const getConnectors = () => get<{ connectors: Connector[] }>("/api/connectors");

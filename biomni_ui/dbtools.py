@@ -264,15 +264,28 @@ def ensembl_gene(gene: str) -> str:
             f"| canonical {d.get('canonical_transcript')} | {d.get('description', '')}")
 
 
+_UNIPROT_ACCESSION = re.compile(r"^([OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2})$")
+
+
 def pdb_structures(query: str, max_results: int = 5) -> str:
-    """Experimental structures in the PDB that match a gene, protein or term: PDB ID | title | method | resolution (A)."""
-    body = {"query": {"type": "terminal", "service": "full_text", "parameters": {"value": query}}, "return_type": "entry",
-            "request_options": {"paginate": {"start": 0, "rows": max_results}}}
+    """Experimental PDB structures of a human gene (symbol, e.g. TP53) or of one UniProt accession (e.g. P04637), not a loose text match:
+    PDB ID | title | method | resolution (A), with the total count."""
+    q = query.strip()
+    text = lambda attr, value: {"type": "terminal", "service": "text", "parameters": {"attribute": attr, "operator": "exact_match", "value": value}}
+    if _UNIPROT_ACCESSION.match(q.upper()):
+        node = text("rcsb_polymer_entity_container_identifiers.reference_sequence_identifiers.database_accession", q.upper())
+        label = f"UniProt {q.upper()}"
+    else:
+        node = {"type": "group", "logical_operator": "and", "nodes": [
+            text("rcsb_entity_source_organism.rcsb_gene_name.value", q),
+            text("rcsb_entity_source_organism.ncbi_scientific_name", "Homo sapiens")]}
+        label = f"{q} (human)"
+    body = {"query": node, "return_type": "entry", "request_options": {"paginate": {"start": 0, "rows": max_results}}}
     try:
         data = _post("https://search.rcsb.org/rcsbsearch/v2/query", body)
     except Exception as e:
-        if "404" in str(e):  # the search service answers 404 when nothing matches
-            return f"PDB found no structure for: {query}"
+        if "404" in str(e) or "JSONDecode" in type(e).__name__ or "Expecting value" in str(e):  # an empty reply means no match
+            return f"PDB found no structure for {label}"
         return _fail("PDB ", e)
     rows = []
     for hit in data.get("result_set", [])[:max_results]:
@@ -286,7 +299,9 @@ def pdb_structures(query: str, max_results: int = 5) -> str:
         method = ((e.get("exptl") or [{}])[0]).get("method", "")
         res = ((e.get("rcsb_entry_info") or {}).get("resolution_combined") or [None])[0]
         rows.append(f"{pid} | {title} | {method} | {res if res is not None else 'n/a'}")
-    return "\n".join(rows) or f"PDB found no structure for: {query}"
+    if not rows:
+        return f"PDB found no structure for {label}"
+    return f"{data.get('total_count', len(rows))} PDB entries for {label}; the first {len(rows)}:\n" + "\n".join(rows)
 
 
 def alphafold_structure(uniprot: str) -> str:
@@ -321,6 +336,28 @@ def pubchem_compound(name: str) -> str:
     return "\n".join(rows) or f"PubChem found no compound named: {name}"
 
 
+def dgidb_interactions(gene: str, max_results: int = 15) -> str:
+    """Drugs that target a gene (DGIdb): drug | approved | interaction type | score (higher = better supported) | sources. Human gene symbols."""
+    query = {"query": '{ genes(names: ["%s"]) { nodes { name interactions { drug { name approved } interactionTypes { type } '
+                      'interactionScore sources { sourceDbName } } } } }' % gene.strip().replace('"', "")}
+    try:
+        data = _post("https://dgidb.org/api/graphql", query)
+    except Exception as e:
+        return _fail("DGIdb ", e)
+    nodes = ((data.get("data") or {}).get("genes") or {}).get("nodes") or []
+    rows = []
+    for n in nodes:
+        for it in sorted(n.get("interactions") or [], key=lambda x: -(x.get("interactionScore") or 0))[:max_results]:
+            drug = (it.get("drug") or {}).get("name", "")
+            approved = "approved" if (it.get("drug") or {}).get("approved") else "investigational"
+            types = ", ".join(t.get("type", "") for t in it.get("interactionTypes") or []) or "type not given"
+            src = ", ".join(sorted({s.get("sourceDbName", "") for s in it.get("sources") or []}))
+            rows.append(f"{drug} | {approved} | {types} | {it.get('interactionScore', 0):.3f} | {src}")
+    if not rows:
+        return f"DGIdb found no drug interaction for {gene}"
+    return f"{len(rows)} drug interactions for {gene} (DGIdb), best supported first:\n" + "\n".join(rows[:max_results])
+
+
 def openalex_works(query: str, max_results: int = 8) -> str:
     """OpenAlex scholarly works (broad coverage beyond PubMed, including preprints): year | title | DOI | venue."""
     import os
@@ -339,6 +376,47 @@ def openalex_works(query: str, max_results: int = 8) -> str:
         venue = (((w.get("primary_location") or {}).get("source")) or {}).get("display_name", "")
         rows.append(f"{w.get('publication_year')} | {w.get('display_name', '')} | {w.get('doi') or 'no DOI'} | {venue}")
     return "\n".join(rows) or f"OpenAlex found no works for: {query}"
+
+
+# ---- a short cache for the database tools: the same gene or accession is often looked up again in the same work ----------------
+# Only successful answers are kept (a failure is tried again next time), for 30 minutes, at most 500 entries. The connector switch
+# (guard below) still runs on every call, so a switched-off database is never answered from the cache.
+import functools as _functools
+import time as _time
+
+CACHE_SECONDS = 1800
+CACHE_MAX = 500
+_cache_store: dict[tuple, tuple[float, str]] = {}
+
+
+def _cached(fn):
+    @_functools.wraps(fn)
+    def inner(*args, **kw):
+        key = (fn.__name__, args, tuple(sorted(kw.items())))
+        hit = _cache_store.get(key)
+        if hit and _time.time() - hit[0] < CACHE_SECONDS:
+            return hit[1]
+        out = fn(*args, **kw)
+        if isinstance(out, str) and " failed:" not in out[:200] and "not found" not in out[:200].lower():
+            if len(_cache_store) >= CACHE_MAX:
+                _cache_store.pop(next(iter(_cache_store)))
+            _cache_store[key] = (_time.time(), out)
+        return out
+    return inner
+
+
+_CACHED_TOOLS = ("clinical_trials", "fda_adverse_events", "chembl_target_compounds", "open_targets", "target_tractability", "uniprot_lookup",
+                 "gtex_expression", "gnomad_constraint", "geo_search", "string_interactions", "reactome_pathways", "ensembl_gene",
+                 "pdb_structures", "alphafold_structure", "pubchem_compound", "openalex_works", "dgidb_interactions")
+for _name in _CACHED_TOOLS:
+    globals()[_name] = _cached(globals()[_name])
+
+
+def clear_cache() -> int:
+    """Forget every cached answer (for tests and for a user who wants fresh data now). Returns how many were kept."""
+    n = len(_cache_store)
+    _cache_store.clear()
+    return n
 
 
 from biomni_ui import connectors as _connectors  # noqa: E402

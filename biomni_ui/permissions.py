@@ -94,6 +94,19 @@ def remove(scope: str, tool: str, key: str | None = None) -> bool:
         return True
 
 
+def everywhere(tool: str) -> bool:
+    """Whether this database tool has a standing grant for every task (automatic tasks cannot ask, so they need this)."""
+    return tool in _read_grants()["global"]
+
+
+def set_everywhere(tool: str, on: bool) -> None:
+    """Grant (or revoke) one database tool for every task. The user sets this in Settings → Databases."""
+    if on:
+        add("global", tool, None, None)
+    else:
+        remove("global", tool)
+
+
 def listing() -> list[dict[str, Any]]:
     data = _read_grants()
     rows = [{"scope": "global", "key": "", "tool": t} for t in data["global"]]

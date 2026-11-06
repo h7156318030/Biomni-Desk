@@ -913,7 +913,7 @@ def expand_batches(output: list[dict[str, Any]]) -> list[dict[str, Any]]:
 DIRECT_NAMES = ("clinical_trials", "fda_adverse_events", "chembl_target_compounds", "open_targets", "target_tractability", "uniprot_lookup",
                 "gtex_expression", "gnomad_constraint", "geo_search", "string_interactions", "reactome_pathways",
                 "pubmed_search", "europepmc_search", "paper_abstracts", "civic_gene_variants",
-                "ensembl_gene", "pdb_structures", "alphafold_structure", "pubchem_compound", "openalex_works")
+                "ensembl_gene", "pdb_structures", "alphafold_structure", "pubchem_compound", "openalex_works", "dgidb_interactions")
 
 
 # Words in a question that call for each direct tool. A tool is offered only when the question names its kind of data (the rest are
@@ -1314,8 +1314,9 @@ def _run_loop_body(*, sess: str, model: str, effort: str, question: str, history
             for fc in lookups:
                 tool = _gated_tool(fc)
                 if tool and permit(tool, str(fc.get("call_id"))) != "allow":
-                    refused[str(fc.get("call_id"))] = (f"The user did not allow the database “{tool}” for this request, so it was not queried. "
-                                                      "Carry on without it, or say what is missing.")
+                    from biomni_ui import connectors as _connectors
+
+                    refused[str(fc.get("call_id"))] = _connectors.refusal_message(tool)
         futures = {str(fc.get("call_id")): (_Done(refused[str(fc.get("call_id"))]) if str(fc.get("call_id")) in refused else _Later(_fetch_one, fc)) for fc in lookups}
         shell = [fc for fc in calls if fc.get("name") == "bash"]
         if len(shell) > 1:  # several commands in one turn were asked for together: they are independent, so they run together

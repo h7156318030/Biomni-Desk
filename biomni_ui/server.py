@@ -1240,6 +1240,20 @@ def put_connector(group_id: str, body: ConnectorIn):
     return {"connectors": connectors.listing()}
 
 
+class ConnectorAlwaysIn(BaseModel):
+    allowed: bool
+
+
+@app.put("/api/connectors/{group_id}/always")
+def put_connector_always(group_id: str, body: ConnectorAlwaysIn):
+    """Allow one database in every task, automatic ones included (a standing grant, the user's own choice in Settings)."""
+    from biomni_ui import connectors
+
+    if not connectors.set_always(group_id, body.allowed):
+        raise HTTPException(status_code=404, detail="No such database connector")
+    return {"connectors": connectors.listing()}
+
+
 @app.get("/api/memory-notes")
 def get_memory_notes(q: str = Query(default="", max_length=200), status: str = Query(default="", max_length=20)):
     """All notes, newest first; with q or status, only the matching ones."""

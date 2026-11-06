@@ -854,6 +854,13 @@ export const zh: Record<string, string> = {
   "No licence file: check before using": "没有许可证文件，使用前请核对",
   "Licence unclear: read the repository's LICENSE file": "许可证不明确，请阅读仓库中的 LICENSE 文件",
   "Or browse the community library (curated skills, tools and databases) →": "或浏览社区库（精选的技能、工具和数据库）→",
+  // Database connectors added in 2026.11.06.1 and automatic-task consent
+  "Allow in automatic tasks too": "自动任务中也允许",
+  "Ensembl human gene records": "Ensembl 人类基因记录",
+  "PDB structures and AlphaFold DB predictions": "PDB 实验结构与 AlphaFold DB 预测结构",
+  "PubChem compounds": "PubChem 化合物",
+  "OpenAlex scholarly works": "OpenAlex 学术文献",
+  "DGIdb drug-gene interactions": "DGIdb 药物-基因相互作用",
   // Save a finished task as a skill
   "Save as a skill": "存为技能",
   "The method of this task, written as a reusable skill. Check it and change anything before you save it.": "把这个任务的方法写成可复用的技能。保存前请检查并修改任何内容。",

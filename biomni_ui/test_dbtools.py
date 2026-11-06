@@ -9,6 +9,11 @@ def resp(payload):
 
 
 class Formatting(unittest.TestCase):
+    def setUp(self):
+        from biomni_ui import dbtools
+
+        dbtools.clear_cache()  # each check sees its own fake answer, not one cached by an earlier check
+
     def test_clinical_trials_rows(self):
         payload = {"totalCount": 1, "studies": [{"protocolSection": {"identificationModule": {"nctId": "NCT1", "briefTitle": "A trial"},
                    "statusModule": {"overallStatus": "RECRUITING", "startDateStruct": {"date": "2026-01"}},
@@ -23,6 +28,7 @@ class Formatting(unittest.TestCase):
         with mock.patch.object(d, "_post", return_value=body):
             self.assertIn("strong constraint", d.gnomad_constraint("G"))
         body["data"]["gene"]["gnomad_constraint"]["oe_lof_upper"] = 0.9
+        d.clear_cache()  # the same gene asked again must reach the (changed) source, not the cached answer
         with mock.patch.object(d, "_post", return_value=body):
             self.assertIn("weak constraint", d.gnomad_constraint("G"))
 

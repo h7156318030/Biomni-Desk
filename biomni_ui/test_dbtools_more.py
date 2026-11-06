@@ -3,7 +3,7 @@ from unittest import mock
 
 from biomni_ui import connectors, dbtools, fast_tools, native_agent
 
-NEW = ("ensembl_gene", "pdb_structures", "alphafold_structure", "pubchem_compound", "openalex_works")
+NEW = ("ensembl_gene", "pdb_structures", "alphafold_structure", "pubchem_compound", "openalex_works", "dgidb_interactions")
 
 
 class Registry(unittest.TestCase):
@@ -26,6 +26,9 @@ class Registry(unittest.TestCase):
 
 
 class Parsing(unittest.TestCase):
+    def setUp(self):
+        dbtools.clear_cache()  # each parsing check sees its own fake answer, not one cached by an earlier check
+
     def test_ensembl_gene_line(self):
         fake = {"id": "ENSG00000141510", "display_name": "TP53", "biotype": "protein_coding", "seq_region_name": "17", "start": 7661779,
                 "end": 7687546, "strand": -1, "canonical_transcript": "ENST00000269305.9", "description": "tumor protein p53"}
@@ -48,6 +51,17 @@ class Parsing(unittest.TestCase):
             out = dbtools.pubchem_compound("aspirin")
         self.assertTrue(out.startswith("2244 | C9H8O4 | 180.16 | 2-acetyloxybenzoic acid"))
 
+    def test_dgidb_lines_are_sorted_by_score(self):
+        fake = {"data": {"genes": {"nodes": [{"name": "EGFR", "interactions": [
+            {"drug": {"name": "LOW", "approved": False}, "interactionTypes": [], "interactionScore": 0.1, "sources": [{"sourceDbName": "TALC"}]},
+            {"drug": {"name": "GEFITINIB", "approved": True}, "interactionTypes": [{"type": "inhibitor"}], "interactionScore": 0.9,
+             "sources": [{"sourceDbName": "ChEMBL"}]}]}]}}}
+        with mock.patch.object(dbtools, "_post", return_value=fake):
+            out = dbtools.dgidb_interactions("EGFR")
+        lines = out.splitlines()
+        self.assertIn("GEFITINIB | approved | inhibitor | 0.900 | ChEMBL", lines[1])
+        self.assertTrue(lines[1].startswith("GEFITINIB") and lines[2].startswith("LOW"))
+
     def test_openalex_lines(self):
         fake = {"results": [{"display_name": "A structural study of p53", "publication_year": 2024, "doi": "https://doi.org/10.1/x",
                              "primary_location": {"source": {"display_name": "Nature"}}}]}
@@ -61,7 +75,50 @@ class Parsing(unittest.TestCase):
                  "rcsb_entry_info": {"resolution_combined": [2.25]}}
         with mock.patch.object(dbtools, "_post", return_value=search), mock.patch.object(dbtools.lit, "_json", return_value=entry):
             out = dbtools.pdb_structures("TP53")
-        self.assertEqual(out, "9CKJ | Co-crystal structure of 53BP1 | X-RAY DIFFRACTION | 2.25")
+        self.assertIn("9CKJ | Co-crystal structure of 53BP1 | X-RAY DIFFRACTION | 2.25", out)
+        self.assertIn("PDB entries for TP53 (human)", out)
+
+    def test_a_gene_is_searched_by_name_within_human_entries(self):
+        with mock.patch.object(dbtools, "_post", return_value={"result_set": []}) as post:
+            dbtools.pdb_structures("TP53")
+        nodes = post.call_args.args[1]["query"]["nodes"]
+        self.assertEqual(nodes[0]["parameters"]["attribute"], "rcsb_entity_source_organism.rcsb_gene_name.value")
+        self.assertEqual(nodes[1]["parameters"]["value"], "Homo sapiens")
+
+    def test_an_accession_is_searched_as_a_sequence_identifier(self):
+        with mock.patch.object(dbtools, "_post", return_value={"result_set": []}) as post:
+            dbtools.pdb_structures("p04637")
+        q = post.call_args.args[1]["query"]
+        self.assertIn("database_accession", q["parameters"]["attribute"])
+        self.assertEqual(q["parameters"]["value"], "P04637")
+
+
+class Cache(unittest.TestCase):
+    def setUp(self):
+        dbtools.clear_cache()
+        self.addCleanup(dbtools.clear_cache)
+
+    def test_a_repeated_lookup_is_answered_from_the_cache(self):
+        fake = {"id": "ENSG00000141510", "display_name": "TP53", "biotype": "protein_coding", "seq_region_name": "17", "start": 1, "end": 2, "strand": 1}
+        with mock.patch.object(dbtools.lit, "_json", return_value=fake) as call:
+            first = dbtools.ensembl_gene("TP53")
+            second = dbtools.ensembl_gene("TP53")
+        self.assertEqual(first, second)
+        self.assertEqual(call.call_count, 1)
+
+    def test_a_failed_lookup_is_tried_again_next_time(self):
+        with mock.patch.object(dbtools.lit, "_json", side_effect=OSError("timed out")) as call:
+            dbtools.ensembl_gene("TP53")
+            dbtools.ensembl_gene("TP53")
+        self.assertEqual(call.call_count, 2)
+
+    def test_clearing_the_cache_asks_again(self):
+        fake = {"id": "ENSG1", "display_name": "X", "biotype": "b", "seq_region_name": "1", "start": 1, "end": 2, "strand": 1}
+        with mock.patch.object(dbtools.lit, "_json", return_value=fake) as call:
+            dbtools.ensembl_gene("TP53")
+            dbtools.clear_cache()
+            dbtools.ensembl_gene("TP53")
+        self.assertEqual(call.call_count, 2)
 
 
 class NotFound(unittest.TestCase):

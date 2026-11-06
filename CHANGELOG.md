@@ -1,4 +1,38 @@
-# Version notes · 版本说明
+## Version 2026.11.06.2 (tag `v2026.11.06.2`)
+
+### What is new
+
+- **DGIdb drug-gene interactions.** Which drugs act on a gene, ranked by how well each is supported, with the sources named. It has its own switch under Settings → Databases.
+- **Consent for automatic tasks.** Automatic tasks cannot ask, so a database used by them needs your consent. In Settings → Databases each database now has "Allow in automatic tasks too". Before this version, a switched-on database that had not been granted was refused in automatic tasks without any sign of why; the refusal now says what to do.
+- **PDB searches are exact.** A gene (human entries only) or a UniProt accession is matched exactly, and the total number of entries is shown. The earlier text search could return unrelated structures.
+- **Faster repeated lookups.** Successful database answers are kept for 30 minutes, so asking again for the same gene or accession is instant. A failed lookup is tried again next time, and a switched-off database is never answered from the cache.
+- **No back doors around a refusal.** When a database is refused, the agent is told not to reach the same service another way (for example with curl or a script). During testing the agent had done exactly that.
+
+### How it was checked
+
+- A live run with three sub-agents: all three started within the same second and ran side by side, finishing 42–45 seconds later. The main model made another call while they ran, so its reasoning overlapped with theirs; it waits only when it has nothing else to do.
+- 741 backend unit tests pass, including the new grant behaviour, the precise PDB search, DGIdb parsing and the cache.
+- DGIdb and the precise PDB search were checked against the live services.
+- Not checked live: an automatic task using a granted database. That needs a grant set by you in Settings.
+
+---
+
+## 版本 2026.11.06.2（标签 `v2026.11.06.2`）
+
+### 新增
+
+- **DGIdb 药物-基因相互作用。** 查询哪些药物作用于某个基因，按证据强度排序，并注明来源。在 设置 → 数据库 中可单独开关。
+- **自动任务的授权。** 自动任务无法提问，因此它用到的数据库需要你事先授权。现在 设置 → 数据库 中每个数据库都有“自动任务中也允许”的开关。在此版本之前，开着的但未授权的数据库在自动任务中会被拒绝，而且不说明原因；现在拒绝信息会说明怎么办。
+- **PDB 查询更精确。** 按基因（只限人类条目）或 UniProt 登录号精确匹配，并显示总条目数。之前的文本搜索可能返回不相关的结构。
+- **重复查询更快。** 成功的数据库结果保留 30 分钟，再次查询同一个基因或登录号会立即返回。失败的查询下次会重新尝试，已关闭的数据库不会从缓存中回答。
+- **不能绕过拒绝。** 数据库被拒绝时，智能体被告知不得用其他方式（例如 curl 或脚本）访问同一服务。测试中智能体确实曾这样绕过。
+
+### 验证情况
+
+- 三个子智能体的实际运行：三个几乎同时启动，并行运行，约 42–45 秒后全部完成。主智能体在它们运行期间又完成了一次模型调用，即它的推理与子智能体重叠；只有在没有其他工作时才等待。
+- 后端单元测试 741 项全部通过，包括新的授权行为、精确的 PDB 查询、DGIdb 解析和缓存。
+- DGIdb 与精确 PDB 查询已对照在线服务检查。
+- 未实际检验：已授权数据库在自动任务中的使用。这需要你在设置中授权。
 
 ## Version 2026.11.06.1 (tag `v2026.11.06.1`)
 

@@ -12,7 +12,7 @@
 - **Save a finished task as a skill.** Under an answer, a draft of its method becomes a reusable skill, which you review before it is saved.
 - **Choose the models for each job.** Pick the model and thinking strength for planning, sub-agents, the reviewer and pictures, separately from the main model.
 - **Sources you can check.** Each answer lists the pages and records it used.
-- **98 built-in skills and many bundled tools** for databases (including Ensembl, PDB, AlphaFold DB, PubChem and OpenAlex), literature and analysis (see the [skill catalogue](docs/SKILLS.md) and the [tool catalogue](docs/TOOLS.md)).
+- **98 built-in skills and many bundled tools** for databases (including Ensembl, PDB, AlphaFold DB, PubChem, OpenAlex and DGIdb), literature and analysis (see the [skill catalogue](docs/SKILLS.md) and the [tool catalogue](docs/TOOLS.md)).
 - **English and 中文** interface, switch in the bottom-left corner.
 
 **Documentation:** [product guide](docs/GUIDE.md) · [skills](docs/SKILLS.md) · [tools](docs/TOOLS.md) · [version notes](CHANGELOG.md)
@@ -93,7 +93,7 @@ Apache-2.0. See `LICENSE`. Biomni-Desk is built on [Biomni](https://github.com/s
 - **把完成的任务存为技能。** 在答案下方，可把该任务的方法起草成可复用的技能；保存前由你审阅。
 - **为每类工作选择模型。** 规划、子智能体、审查和图片可分别选择模型和思考强度，与主模型互不影响。
 - **来源可核对。** 每个答案列出它用到的页面和记录。
-- **98 个内置技能，以及大量用于数据库（包括 Ensembl、PDB、AlphaFold DB、PubChem、OpenAlex）、文献和分析的工具**（见[技能目录](docs/SKILLS.md)和[工具目录](docs/TOOLS.md)）。
+- **98 个内置技能，以及大量用于数据库（包括 Ensembl、PDB、AlphaFold DB、PubChem、OpenAlex、DGIdb）、文献和分析的工具**（见[技能目录](docs/SKILLS.md)和[工具目录](docs/TOOLS.md)）。
 - **界面支持中文和英文**，左下角可切换。
 
 **文档：** [产品指南](docs/GUIDE.md) · [技能](docs/SKILLS.md) · [工具](docs/TOOLS.md) · [版本说明](CHANGELOG.md)

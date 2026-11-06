@@ -208,7 +208,7 @@ SCHEMAS: list[dict[str, Any]] = [
 DB_MODULE = "biomni_ui.dbtools"
 DB_TOOLS = ["clinical_trials", "fda_adverse_events", "chembl_target_compounds", "open_targets", "target_tractability", "uniprot_lookup",
             "gtex_expression", "gnomad_constraint", "geo_search", "string_interactions", "reactome_pathways",
-            "ensembl_gene", "pdb_structures", "alphafold_structure", "pubchem_compound", "openalex_works"]
+            "ensembl_gene", "pdb_structures", "alphafold_structure", "pubchem_compound", "openalex_works", "dgidb_interactions"]
 DB_PARAMS = {
     "uniprot": "UniProt accession, e.g. 'P04637'", "name": "Compound name in English, e.g. 'aspirin'",
     "condition": "Disease or condition, e.g. 'beta thalassemia'", "intervention": "Drug or intervention words, e.g. 'gene therapy' (optional)",

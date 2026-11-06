@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getConnectors, listGrants, listProjects, revokeGrant, setConnector, type Connector, type Grant, type Project } from "@/lib/api";
+import { getConnectors, listGrants, listProjects, revokeGrant, setConnector, setConnectorAlways, type Connector, type Grant, type Project } from "@/lib/api";
 import { Card, Toggle } from "@/components/settings/ui";
 import { useI18n } from "@/lib/i18n";
 
@@ -36,6 +36,16 @@ export function DatabasesSection() {
     }
   };
 
+  const flipAlways = async (id: string, on: boolean) => {
+    try {
+      const r = await setConnectorAlways(id, on);
+      setConnectors(r.connectors);
+      setMsg(null);
+    } catch {
+      setMsg(t("Could not save. Please try again."));
+    }
+  };
+
   const unlock = async (g: Grant) => {
     try {
       const r = await revokeGrant(g);
@@ -58,7 +68,15 @@ export function DatabasesSection() {
         {connectors === null ? (
           <p className="text-sm text-soft">{t("Loading…")}</p>
         ) : (
-          connectors.map((c) => <Toggle key={c.id} checked={c.enabled} onChange={(v) => flip(c.id, v)} label={t(c.title)} hint={c.tools.join(listSep)} />)
+          connectors.map((c) => (
+            <div key={c.id} className="space-y-1">
+              <Toggle checked={c.enabled} onChange={(v) => flip(c.id, v)} label={t(c.title)} hint={c.tools.join(listSep)} />
+              <label className="ml-1 flex items-center gap-2 text-xs text-soft">
+                <input type="checkbox" checked={c.always} disabled={!c.enabled} onChange={(e) => flipAlways(c.id, e.target.checked)} />
+                {t("Allow in automatic tasks too")}
+              </label>
+            </div>
+          ))
         )}
       </Card>
 

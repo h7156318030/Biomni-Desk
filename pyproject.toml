@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "biomni-lite"
-version = "2026.11.06.1"
+version = "2026.11.06.2"
 description = "Biomni-Desk: A lightweight biomedical AI agent powered by strong LLMs, no local data lake required"
 readme = "README.md"
 license = "Apache-2.0"
