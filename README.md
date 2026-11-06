@@ -17,6 +17,16 @@
 
 **Documentation:** [product guide](docs/GUIDE.md) · [skills](docs/SKILLS.md) · [tools](docs/TOOLS.md) · [version notes](CHANGELOG.md)
 
+### Screenshots
+
+| Home | A finished answer with sources |
+|---|---|
+| ![Home](docs/images/01-home.png) | ![Answer](docs/images/04-answer.png) |
+
+| Plan review | Skills |
+|---|---|
+| ![Plan review](docs/images/03-plan-review.png) | ![Skills](docs/images/06-skills.png) |
+
 ### Requirements
 
 - Windows, macOS or Linux
@@ -87,6 +97,16 @@ Apache-2.0. See `LICENSE`. Biomni-Desk is built on [Biomni](https://github.com/s
 - **界面支持中文和英文**，左下角可切换。
 
 **文档：** [产品指南](docs/GUIDE.md) · [技能](docs/SKILLS.md) · [工具](docs/TOOLS.md) · [版本说明](CHANGELOG.md)
+
+### 截图
+
+| 首页 | 带来源的完整答案 |
+|---|---|
+| ![首页](docs/images/01-home.png) | ![答案](docs/images/04-answer.png) |
+
+| 计划确认 | 技能 |
+|---|---|
+| ![计划确认](docs/images/03-plan-review.png) | ![技能](docs/images/06-skills.png) |
 
 ### 运行要求
 
