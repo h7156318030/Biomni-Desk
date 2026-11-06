@@ -40,4 +40,4 @@ ENV BIOMNI_PATH="/workspace/data"
 WORKDIR /workspace
 
 # Default: verify installation and print usage hints
-CMD ["python", "-c", "from biomni.agent import A1; from biomni.agent.ad1 import AD1; print('Biomni-Lite ready.\\n  General biomedical : A1()\\n  Alzheimer\\'s Disease: AD1()\\nExample: A1().go(\\'your query\\')  |  AD1().go(\\'your query\\')')"]
+CMD ["python", "-c", "from biomni.agent import A1; from biomni.agent.ad1 import AD1; print('Biomni-Desk ready.\\n  General biomedical : A1()\\n  Alzheimer\\'s Disease: AD1()\\nExample: A1().go(\\'your query\\')  |  AD1().go(\\'your query\\')')"]

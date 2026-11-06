@@ -390,7 +390,7 @@ def download_synapse_data(
 
 
 def download_data_lake_file(filename: str, data_lake_path: str = "./data/biomni_data/data_lake") -> str:
-    """Download a Biomni-Lite data lake file from Zenodo on demand.
+    """Download a Biomni-Desk data lake file from Zenodo on demand.
 
     Data lake files are hosted at https://zenodo.org/records/18759554.
     Files are cached locally — if already downloaded, this returns immediately.

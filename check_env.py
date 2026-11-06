@@ -1,4 +1,4 @@
-"""Biomni-Lite 配置自检：不发起任何 API 请求，只看配置是否被正确装载。
+"""Biomni-Desk 配置自检：不发起任何 API 请求，只看配置是否被正确装载。
 
 用法：
     .venv\\Scripts\\python.exe check_env.py
@@ -28,7 +28,7 @@ def mask(v: str | None) -> str:
 
 
 print("=" * 56)
-print("Biomni-Lite 配置自检")
+print("Biomni-Desk 配置自检")
 print("=" * 56)
 print(f".env 路径        : {ENV_PATH}")
 print(f"source           : {default_config.source}")

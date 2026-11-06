@@ -5,7 +5,7 @@
     </marker>
   </defs>
   <rect width="960" height="560" fill="#faf9f6"/>
-  <text x="480" y="38" text-anchor="middle" font-size="22" font-weight="600" fill="#1e1c17">How Biomni-Lite fits together</text>
+  <text x="480" y="38" text-anchor="middle" font-size="22" font-weight="600" fill="#1e1c17">How Biomni-Desk fits together</text>
   <text x="480" y="62" text-anchor="middle" font-size="13" fill="#5b6b62">Everything runs on your own computer; only model and database requests leave it.</text>
 
   <!-- Row 1: user -> web -> backend -> agent -->

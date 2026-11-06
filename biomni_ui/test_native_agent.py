@@ -327,9 +327,9 @@ class SandboxLinks(unittest.TestCase):
     def test_a_sandbox_link_becomes_the_file_path_and_a_deck_is_listed_as_a_result(self):
         from biomni_ui.events import extract_files
 
-        out = na.clean_answer("[下载](sandbox:/C:/work/biomni-lite/药物_2026.pptx)")
-        self.assertEqual(out, "[下载](C:/work/biomni-lite/药物_2026.pptx)")
-        self.assertEqual(extract_files(r"Saved: C:\work\biomni-lite\药物_2026.pptx | size: 3"), [r"C:\work\biomni-lite\药物_2026.pptx"])
+        out = na.clean_answer("[下载](sandbox:/F:/Biomni-Desk/Biomni-Desk-main/药物_2026.pptx)")
+        self.assertEqual(out, "[下载](F:/Biomni-Desk/Biomni-Desk-main/药物_2026.pptx)")
+        self.assertEqual(extract_files(r"Saved: F:\Biomni-Desk\Biomni-Desk-main\药物_2026.pptx | size: 3"), [r"F:\Biomni-Desk\Biomni-Desk-main\药物_2026.pptx"])
 
 
 if __name__ == "__main__":

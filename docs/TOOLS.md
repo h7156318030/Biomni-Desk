@@ -1,6 +1,6 @@
 # Bundled tool catalogue
 
-Biomni-Lite registers **225 bundled tools** from the Biomni tool library (in `biomni/tool/`). The agent searches this catalogue with `find_tools` and calls the tools it needs. Some tools need optional software or data; the app reports which tools are ready on your computer, in **Resources → Tools** and in the agent's activity log.
+Biomni-Desk registers **225 bundled tools** from the Biomni tool library (in `biomni/tool/`). The agent searches this catalogue with `find_tools` and calls the tools it needs. Some tools need optional software or data; the app reports which tools are ready on your computer, in **Resources → Tools** and in the agent's activity log.
 
 The list below is generated from the registry. Descriptions are the tools' own.
 

@@ -927,7 +927,7 @@ def download_and_unzip(url: str, dest_dir: str) -> str:
 def download_from_zenodo(filename: str, local_data_lake_path: str, record_id: str = "18759554") -> str:
     """Download a single data lake file from Zenodo on demand.
 
-    All Biomni-Lite data lake files are hosted at:
+    All Biomni-Desk data lake files are hosted at:
         https://zenodo.org/records/{record_id}/files/{filename}
 
     Files are cached locally so subsequent calls return immediately.
@@ -2321,7 +2321,7 @@ def get_pdf_css_content() -> str:
 
 
 # Restored from the official Biomni release (used by the official A1 when it is asked to download the whole data lake;
-# Biomni-Lite passes expected_data_lake_files=[] so this is not called at start-up).
+# Biomni-Desk passes expected_data_lake_files=[] so this is not called at start-up).
 def check_and_download_s3_files(
     s3_bucket_url: str, local_data_lake_path: str, expected_files: list[str], folder: str = "data_lake"
 ) -> dict[str, bool]:

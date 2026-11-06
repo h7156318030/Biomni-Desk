@@ -1,6 +1,6 @@
 """LangChain chat model that talks to ChatGPT through the locally logged-in Codex CLI.
 
-A ChatGPT membership is not an OpenAI API key, so Biomni-Lite cannot use it through the
+A ChatGPT membership is not an OpenAI API key, so Biomni-Desk cannot use it through the
 "OpenAI" source. This wrapper shells out to `codex exec` (the official CLI, using its own
 login) once per call. Nothing here reads or copies the CLI's credentials.
 

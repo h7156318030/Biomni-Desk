@@ -1,6 +1,6 @@
 # Skill catalogue
 
-Biomni-Lite ships **98 built-in skills**: step-by-step manuals that the agent loads when a question needs them. Each skill lists when to use it, when not to, the tools it relies on, and the output conventions it follows. You can also write your own skills in the **Skills** page.
+Biomni-Desk ships **98 built-in skills**: step-by-step manuals that the agent loads when a question needs them. Each skill lists when to use it, when not to, the tools it relies on, and the output conventions it follows. You can also write your own skills in the **Skills** page.
 
 The table of contents below is generated from the skill files in `biomni_ui/builtin_skills/`.
 

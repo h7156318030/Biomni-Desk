@@ -21,7 +21,7 @@ import requests
 
 TIMEOUT = 12
 MAX_ITEMS = 30
-UA = "Biomni-Lite-workbench/0.1 (reference lookup; local use)"
+UA = "Biomni-Desk-workbench/0.1 (reference lookup; local use)"
 PUBMED = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
 CROSSREF = "https://api.crossref.org/works/"
 

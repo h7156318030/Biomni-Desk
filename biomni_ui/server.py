@@ -71,7 +71,7 @@ skills = SkillStore(ROOT / "skills", ROOT / "ui_data" / "skills_state.json")
 def _make_agent():
     from biomni.agent import A1
 
-    # The official A1 downloads the whole data lake from S3 at start-up unless it is told not to: Biomni-Lite fetches each dataset
+    # The official A1 downloads the whole data lake from S3 at start-up unless it is told not to: Biomni-Desk fetches each dataset
     # from Zenodo when the agent asks for it, so start-up passes an empty list.
     agent = A1(expected_data_lake_files=[])
     agent_catalog.attach(agent)  # the full dataset catalogue joins the official prompt (the agent class itself is unchanged)
@@ -212,7 +212,7 @@ async def lifespan(_app):
     manager.stop_workers()
 
 
-app = FastAPI(title="Biomni-Lite API", lifespan=lifespan)
+app = FastAPI(title="Biomni-Desk API", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origin_regex=WEB_ORIGIN_REGEX, allow_methods=["*"], allow_headers=["*"])
 
 

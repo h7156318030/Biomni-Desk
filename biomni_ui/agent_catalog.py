@@ -1,6 +1,6 @@
 """The full dataset catalogue, added to the official A1 agent's system prompt from the outside.
 
-The official A1 lists only the datasets already on disk, so it does not know the others exist. Biomni-Lite keeps the whole catalogue (the
+The official A1 lists only the datasets already on disk, so it does not know the others exist. Biomni-Desk keeps the whole catalogue (the
 datasets hosted on Zenodo) in the prompt as names and status only, to keep the prompt short. A description is one call away:
 dataset_info(name) in the agent's Python. A dataset is fetched when a task needs it, with biomni.tool.support_tools.download_data_lake_file.
 The agent class itself is not changed: its prompt generator is wrapped on the instance, and dataset_info is added to its Python environment.
@@ -26,7 +26,7 @@ def catalog_block(datasets: dict[str, str], data_lake_dir: str, local: set[str] 
     """The catalogue as prompt text: one line per dataset with its status, and how to get a description or a dataset."""
     present = _local_names(data_lake_dir) if local is None else local
     lines = [
-        "## Dataset catalogue (Biomni-Lite)",
+        "## Dataset catalogue (Biomni-Desk)",
         f"The datasets below are hosted at {ZENODO_URL}/<filename>. Each name ends with its status: 'available locally' or 'download needed'.",
         "For what a dataset contains, run dataset_info('<name>') in Python.",
         "To use a dataset whose status is 'download needed', fetch it first (it is cached, so a second call returns at once):",

@@ -70,7 +70,7 @@ export function Rail() {
 
   return (
     <nav aria-label={t("Main navigation")} className="hidden w-14 shrink-0 flex-col items-center border-r border-line bg-panel py-3 lg:flex">
-      <Link href="/" aria-label={t("Biomni-Lite home")} className="mb-3 text-accent">
+      <Link href="/" aria-label={t("Biomni-Desk home")} className="mb-3 text-accent">
         <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
           <circle cx="14" cy="14" r="12.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
           <path d="M14 5.5c-4.2 2.6-5.6 7.4-3 11.2 1.6 2.3 4.6 3.4 7.2 2.2M14 5.5c3.4 1.6 5 5.2 3.8 8.4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />

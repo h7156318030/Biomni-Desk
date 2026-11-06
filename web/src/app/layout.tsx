@@ -5,7 +5,7 @@ import { I18nProvider } from "@/lib/i18n";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Biomni-Lite workspace",
+  title: "Biomni-Desk workspace",
   description: "Local biomedical research agent workspace",
 };
 

@@ -729,7 +729,7 @@ export default function Home() {
             <circle cx="14" cy="14" r="1.9" fill="currentColor" />
           </svg>
           <div>
-            <h1 className="font-serif text-xl font-semibold leading-tight">Biomni-Lite</h1>
+            <h1 className="font-serif text-xl font-semibold leading-tight">Biomni-Desk</h1>
             <p className="text-xs text-soft">{t("Local biomedical agent")}</p>
           </div>
         </div>
@@ -834,7 +834,7 @@ export default function Home() {
             ☰ {t("History")}
           </button>
           <span className="flex items-center gap-2 font-serif font-semibold">
-            Biomni-Lite
+            Biomni-Desk
             {(running || shownSeconds > 0) && (
               <span className={`font-sans text-xs font-normal tabular-nums ${running ? "text-accent" : "text-soft"}`}>{clock(shownSeconds)}</span>
             )}

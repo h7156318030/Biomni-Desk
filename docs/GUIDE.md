@@ -1,8 +1,8 @@
-# Biomni-Lite: product guide
+# Biomni-Desk: product guide
 
-Biomni-Lite is a **local, bilingual research assistant for biomedicine**. You ask a question in plain language; the agent makes a plan, queries public databases and papers, runs analysis code, and answers with the sources it actually looked at. Everything runs on your own computer: conversations, results, settings and keys stay in a folder on your machine.
+Biomni-Desk is a **local, bilingual research assistant for biomedicine**. You ask a question in plain language; the agent makes a plan, queries public databases and papers, runs analysis code, and answers with the sources it actually looked at. Everything runs on your own computer: conversations, results, settings and keys stay in a folder on your machine.
 
-![Biomni-Lite home page](images/01-home.png)
+![Biomni-Desk home page](images/01-home.png)
 
 ---
 
@@ -24,7 +24,7 @@ Biomni-Lite is a **local, bilingual research assistant for biomedicine**. You as
 
 ## 1. What it is
 
-Biomedical questions usually need several sources: a gene's function in UniProt, its disease links in Open Targets, the trials in ClinicalTrials.gov, the papers in PubMed, and a calculation on top. Biomni-Lite does this work inside one conversation:
+Biomedical questions usually need several sources: a gene's function in UniProt, its disease links in Open Targets, the trials in ClinicalTrials.gov, the papers in PubMed, and a calculation on top. Biomni-Desk does this work inside one conversation:
 
 - it **plans** the steps, and for complex tasks waits for your approval;
 - it **calls tools** (about 225 bundled tools, plus web search, PDF reading and a Python kernel);
@@ -190,7 +190,7 @@ The full table, with what each skill does and when to use it, is in [docs/SKILLS
 
 ## 7. Models and settings
 
-Biomni-Lite does not come with a model. You choose one:
+Biomni-Desk does not come with a model. You choose one:
 
 **ChatGPT subscription.** Open **Settings → Models**, click **Log in to ChatGPT** and follow the code shown there. No separate command-line tool is needed. The app uses the membership's model (gpt-6-luna), with reasoning effort set to Medium, High or Extra high.
 

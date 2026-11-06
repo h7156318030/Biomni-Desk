@@ -56,7 +56,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
     // The tab title comes from the static page metadata (English); translate it for the current language.
-    document.title = DICTIONARIES[lang]["Biomni-Lite workspace"] ?? "Biomni-Lite workspace";
+    document.title = DICTIONARIES[lang]["Biomni-Desk workspace"] ?? "Biomni-Desk workspace";
   }, [lang]);
 
   const setLang = useCallback((next: Lang) => {

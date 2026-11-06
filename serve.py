@@ -1,5 +1,5 @@
 """
-Biomni-Lite Gradio web UI entrypoint.
+Biomni-Desk Gradio web UI entrypoint.
 
 Launch with:
     python serve.py
@@ -149,9 +149,9 @@ def main() -> None:
     chosen: dict = {"value": "a1"}
     ready = threading.Event()
 
-    with gr.Blocks(title="Biomni-Lite — Select Agent") as selector:
+    with gr.Blocks(title="Biomni-Desk — Select Agent") as selector:
         gr.Markdown(
-            "# 🧬 Biomni-Lite\n"
+            "# 🧬 Biomni-Desk\n"
             "**Choose an agent to launch:**"
         )
         with gr.Row():

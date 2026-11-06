@@ -1,8 +1,8 @@
-# Biomni-Lite
+# Biomni-Desk
 
 **A local, bilingual research assistant for biomedicine.** Ask a question in plain language. The agent plans the work, queries public databases and papers, runs analysis code, and answers with the sources it actually read. Everything runs on your own computer.
 
-![Biomni-Lite home page](docs/images/01-home.png)
+![Biomni-Desk home page](docs/images/01-home.png)
 
 - **Plan first.** Complex tasks show their plan and wait for your approval.
 - **Every step is visible.** The activity log lists each search, database call and code step.
@@ -51,7 +51,7 @@ Pass `--core` (or `-Core` on Windows) to skip the large analysis packages (scanp
 
 ## Start and stop
 
-**Windows:** double-click `start.bat`. Close the two Biomni-Lite windows to stop.
+**Windows:** double-click `start.bat`. Close the two Biomni-Desk windows to stop.
 
 **macOS or Linux:**
 
@@ -96,7 +96,7 @@ Keys and the ChatGPT login are stored only on your computer. `.env.example` list
 
 ## 简体中文简介
 
-Biomni-Lite 是一个**本地运行的生物医学研究助手**，界面支持中英文切换。你用自然语言提问，智能体会先列出计划（复杂任务需要你确认），再查询公共数据库与文献、运行分析代码，最后给出答案和可核对的来源。对话、结果、设置和密钥都保存在你自己的电脑上。
+Biomni-Desk 是一个**本地运行的生物医学研究助手**，界面支持中英文切换。你用自然语言提问，智能体会先列出计划（复杂任务需要你确认），再查询公共数据库与文献、运行分析代码，最后给出答案和可核对的来源。对话、结果、设置和密钥都保存在你自己的电脑上。
 
 安装与使用请见上文，图文详解见 [docs/GUIDE.md](docs/GUIDE.md)。
 
@@ -104,4 +104,4 @@ Biomni-Lite 是一个**本地运行的生物医学研究助手**，界面支持�
 
 ## License
 
-Apache-2.0. See `LICENSE`. Biomni-Lite is built on [Biomni](https://github.com/snap-stanford/biomni); the original project's license and attribution are kept.
+Apache-2.0. See `LICENSE`. Biomni-Desk is built on [Biomni](https://github.com/snap-stanford/biomni); the original project's license and attribution are kept.

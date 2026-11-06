@@ -1,4 +1,4 @@
-# Biomni-Lite one-click installer for Windows.
+# Biomni-Desk one-click installer for Windows.
 # Usage: double-click install.bat, or run:  powershell -ExecutionPolicy Bypass -File install.ps1 [-Core]
 #   -Core   install only the core packages (no scanpy, rdkit and other large analysis packages)
 
@@ -75,5 +75,5 @@ if ($LASTEXITCODE -ne 0) { Pop-Location; Fail "The web page build failed." }
 Pop-Location
 
 Write-Host ""
-Write-Host "Installed. Start Biomni-Lite with start.bat, then open http://localhost:3001" -ForegroundColor Green
+Write-Host "Installed. Start Biomni-Desk with start.bat, then open http://localhost:3001" -ForegroundColor Green
 Read-Host "Press Enter to close"

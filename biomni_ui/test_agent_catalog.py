@@ -44,7 +44,7 @@ class Attach(unittest.TestCase):
             agent_catalog.attach(agent)
             prompt = agent._generate_system_prompt("tools", [], [])
         self.assertTrue(prompt.startswith("OFFICIAL PROMPT"))
-        self.assertIn("## Dataset catalogue (Biomni-Lite)", prompt)
+        self.assertIn("## Dataset catalogue (Biomni-Desk)", prompt)
         self.assertIn("- a.pkl [download needed]", prompt)
 
     def test_attaching_twice_does_not_add_the_catalogue_twice(self):
@@ -88,7 +88,7 @@ class RealAgent(unittest.TestCase):
             agent = A1(path=d, expected_data_lake_files=[])
             agent_catalog.attach(agent)
             agent.configure()
-            self.assertIn("## Dataset catalogue (Biomni-Lite)", agent.system_prompt)
+            self.assertIn("## Dataset catalogue (Biomni-Desk)", agent.system_prompt)
             self.assertIn("- gwas_catalog.pkl [", agent.system_prompt)  # a name from the real catalogue, with its state
             self.assertFalse(os.path.exists(os.path.join(agent.path, "data_lake", "gwas_catalog.pkl")))  # and nothing was downloaded
 

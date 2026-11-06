@@ -1,4 +1,4 @@
-# Biomni-Lite Python dependencies. Installed by install.bat / install.sh.
+# Biomni-Desk Python dependencies. Installed by install.bat / install.sh.
 # Python 3.12 is required (the versions below are tested on it).
 # The versions below are the ones the app is tested with; newer releases may change behaviour.
 

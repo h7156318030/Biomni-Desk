@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Start Biomni-Lite on macOS and Linux: the backend on port 8765 and the web page on port 3001.
+# Start Biomni-Desk on macOS and Linux: the backend on port 8765 and the web page on port 3001.
 # Stop it with ./stop.sh
 set -euo pipefail
 cd "$(dirname "$0")"
 
-[ -x .venv/bin/python ] || { echo "Biomni-Lite is not installed yet. Run ./install.sh first."; exit 1; }
+[ -x .venv/bin/python ] || { echo "Biomni-Desk is not installed yet. Run ./install.sh first."; exit 1; }
 export PYTHONIOENCODING=utf-8
 export NO_PROXY=localhost,127.0.0.1,::1
 export no_proxy=localhost,127.0.0.1,::1

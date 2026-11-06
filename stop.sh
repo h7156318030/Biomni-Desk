@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stop Biomni-Lite started with ./start.sh
+# Stop Biomni-Desk started with ./start.sh
 cd "$(dirname "$0")"
 for name in web backend; do
     pidfile="ui_data/$name.pid"

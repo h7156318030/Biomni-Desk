@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Biomni-Lite one-click installer for macOS and Linux.
+# Biomni-Desk one-click installer for macOS and Linux.
 # Usage: ./install.sh            (all packages)
 #        ./install.sh --core     (core packages only: no scanpy, rdkit and other large analysis packages)
 set -euo pipefail
@@ -47,4 +47,4 @@ mkdir -p ui_data
 step "Building the web page (first time only, about a minute)"
 (cd web && npm install && npm run build) || fail "The web page build failed."
 
-printf '\nInstalled. Start Biomni-Lite with ./start.sh, then open http://localhost:3001\n'
+printf '\nInstalled. Start Biomni-Desk with ./start.sh, then open http://localhost:3001\n'

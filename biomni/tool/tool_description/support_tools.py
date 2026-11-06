@@ -72,7 +72,7 @@ description = [
         ],
     },
     {
-        "description": "Download a Biomni-Lite data lake file from Zenodo on demand. Files are cached locally — if already downloaded, this returns immediately.",
+        "description": "Download a Biomni-Desk data lake file from Zenodo on demand. Files are cached locally — if already downloaded, this returns immediately.",
         "name": "download_data_lake_file",
         "optional_parameters": [
             {

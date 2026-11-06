@@ -2,7 +2,7 @@
 # load-and-run.sh
 #
 # Run this script on the TARGET VM (restricted / air-gapped network) to import
-# a previously saved Biomni-Lite Docker image and start the Gradio web UI.
+# a previously saved Biomni-Desk Docker image and start the Gradio web UI.
 #
 # Prerequisites on the VM:
 #   - Docker Engine (https://docs.docker.com/engine/install/)
@@ -59,7 +59,7 @@ PORT="${GRADIO_PORT:-7860}"
 AGENT="${BIOMNI_AGENT:-}"
 
 echo ""
-echo "==> Starting Biomni-Lite Gradio UI on port ${PORT} ..."
+echo "==> Starting Biomni-Desk Gradio UI on port ${PORT} ..."
 
 # Recommend direct agent launch for VPN / remote VM deployments to avoid
 # the selector page transition (which requires a browser reload).
@@ -75,7 +75,7 @@ cd "${REPO_ROOT}"
 docker compose up biomni-lite-gradio -d
 
 echo ""
-echo "Biomni-Lite is running!"
+echo "Biomni-Desk is running!"
 echo "Open http://$(hostname -I 2>/dev/null | awk '{print $1}'):${PORT} in your browser."
 echo ""
 echo "To view logs : docker compose logs -f biomni-lite-gradio"

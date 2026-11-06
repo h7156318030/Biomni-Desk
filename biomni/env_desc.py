@@ -1,4 +1,4 @@
-# Biomni-Lite: Data lake files available on-demand from Zenodo.
+# Biomni-Desk: Data lake files available on-demand from Zenodo.
 # Files are NOT downloaded automatically on init. The agent downloads only what it needs.
 ZENODO_RECORD_ID = "18759554"
 ZENODO_BASE_URL = f"https://zenodo.org/records/{ZENODO_RECORD_ID}/files"

@@ -1,4 +1,4 @@
-"""Sign in to ChatGPT for Biomni-Lite: `python -m biomni_ui.chatgpt_login` (add `--check` to test, `--logout` to forget)."""
+"""Sign in to ChatGPT for Biomni-Desk: `python -m biomni_ui.chatgpt_login` (add `--check` to test, `--logout` to forget)."""
 
 from __future__ import annotations
 

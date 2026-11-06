@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # save-image.sh
 #
-# Run this script on an INTERNET-CONNECTED machine to build the Biomni-Lite
+# Run this script on an INTERNET-CONNECTED machine to build the Biomni-Desk
 # Docker image and export it as a compressed tarball that can be transferred
 # to an air-gapped or restricted-internet VM.
 #
