@@ -68,7 +68,7 @@ class FromAnswer(InTempDir):
         from biomni_ui import research
 
         answer = "结论一句话。\n\n## 关键发现\n\n- 要点 [站点](https://a.org/x)\n\n## 论文\n\n| 年份 | 标题 |\n|---|---|\n| 2024 | 甲 |\n"
-        code, msg = research.report_from_answer("示例医药近期合作？", answer, ["https://a.org/x"])
+        code, msg = research.report_from_answer("上海佰炼医药近期合作？", answer, ["https://a.org/x"])
         self.assertIn("build_report", code)
         name = msg.split("Report saved: ")[1].split(" (")[0]
         page = Path(name).read_text(encoding="utf-8")

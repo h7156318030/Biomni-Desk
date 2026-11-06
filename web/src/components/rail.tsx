@@ -16,6 +16,12 @@ const ICON = {
       <path d="M8.2 6H14a3 3 0 0 1 3 3v1m-9.8 4H10a3 3 0 0 0 3 3h2.8" />
     </>
   ),
+  schedules: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </>
+  ),
   resources: (
     <>
       <ellipse cx="12" cy="5" rx="8" ry="3" />
@@ -46,10 +52,11 @@ function Icon({ name }: { name: keyof typeof ICON }) {
 
 // Labels are English source strings; the language provider translates them.
 const NAV: { href: string; label: string; icon: keyof typeof ICON; match: (p: string) => boolean }[] = [
-  { href: "/", label: "Projects", icon: "project", match: (p) => p === "/" },
+  { href: "/projects", label: "Projects", icon: "project", match: (p) => p.startsWith("/projects") || p.startsWith("/project") },
   { href: "/skills", label: "Skills", icon: "skills", match: (p) => p.startsWith("/skills") },
   { href: "/resources", label: "Resources", icon: "resources", match: (p) => p.startsWith("/resources") },
   { href: "/pipelines", label: "Pipelines", icon: "pipelines", match: (p) => p.startsWith("/pipelines") },
+  { href: "/schedules", label: "Schedules", icon: "schedules", match: (p) => p.startsWith("/schedules") },
 ];
 
 function RailItem({ active, label, children }: { active: boolean; label: string; children: React.ReactNode }) {

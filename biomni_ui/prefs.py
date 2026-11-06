@@ -84,7 +84,16 @@ def clean_project_settings(data: dict[str, Any]) -> dict[str, Any]:
         "context": str(data.get("context") or "").strip()[:MAX_CONTEXT_CHARS],
         "instructions": _lines(data.get("instructions"), MAX_INSTRUCTIONS, MAX_INSTRUCTION_CHARS),
         "skills": _lines(data.get("skills"), 20, 60),
+        "files": _lines(data.get("files"), 20, 200),  # upload names the project's tasks can read
+        "tools_off": [t for t in dict.fromkeys(str(x) for x in (data.get("tools_off") or [])) if t in _toggleable()][:10],
+        "memory_on": bool(data.get("memory_on", True)),  # off: nothing remembered is used in this project's tasks
     }
+
+
+def _toggleable() -> tuple[str, ...]:
+    from biomni_ui import agents
+
+    return agents.TOGGLEABLE_TOOLS
 
 
 class PrefsStore:

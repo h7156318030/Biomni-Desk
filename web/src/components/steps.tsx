@@ -189,11 +189,57 @@ function StepCard({ step, turnId, running }: { step: Step; turnId: string; runni
   );
 }
 
+type SubEvent = Extract<AgentEvent, { type: "subagent" }>;
+
+/** A delegated sub-task: one collapsible card with its own steps nested inside and its answer when it finishes. */
+function SubagentCard({ ev, kids, turnId, live }: { ev: SubEvent; kids: AgentEvent[]; turnId: string; live: boolean }) {
+  const { t } = useI18n();
+  const running = ev.status === "running";
+  const failed = ev.status === "failed";
+  return (
+    <div id={`ev-${turnId}-${ev.seq}`} className="space-y-1.5">
+      <details open={running} className={`group rounded-lg border bg-card ${failed ? "border-warn" : "border-line"}`}>
+        <summary className="flex cursor-pointer select-none items-center gap-2 px-3 py-2 text-sm marker:content-none">
+          <span className="inline-block text-xs text-soft transition-transform group-open:rotate-90">▸</span>
+          <span className="rounded bg-accent-soft px-1.5 py-0.5 text-xs text-accent">{t("Sub-agent")}</span>
+          <span className="min-w-0 flex-1 truncate font-medium">{ev.task || t("Sub-task")}</span>
+          {running ? (
+            <span className="pulse text-xs text-accent">{t("Running…")}</span>
+          ) : (
+            <span className={`shrink-0 text-xs ${failed ? "text-warn" : "text-soft"}`}>
+              {failed ? t("Failed") : t("{n} steps", { n: ev.steps ?? 0 })}
+            </span>
+          )}
+        </summary>
+        <div className="space-y-2 border-t border-line px-3 py-3">
+          {kids.length > 0 && <StepCards items={kids} turnId={turnId} live={live && running} />}
+          {ev.answer && (
+            <div className="md text-sm">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{ev.answer}</ReactMarkdown>
+            </div>
+          )}
+        </div>
+      </details>
+    </div>
+  );
+}
+
 /** The working trace as short narrations plus one card per tool call, instead of a stack of code and output blocks. */
 export function StepCards({ items, turnId, live }: { items: AgentEvent[]; turnId: string; live: boolean }) {
   const nodes: React.ReactNode[] = [];
   let narration: string | undefined;
   let current: Step | null = null;
+  // a sub-agent sends a "running" and then a "done" or "failed" event under one id: fold them into one card with its latest state
+  const merged = new Map<string, SubEvent>();
+  for (const ev of items) {
+    if (ev.type !== "subagent") continue;
+    const prev = merged.get(ev.id);
+    merged.set(ev.id, prev ? { ...prev, ...ev, task: ev.task || prev.task } : ev);
+  }
+  // steps a sub-agent made are shown inside its card, not on the main trace
+  const kids = new Map<string, AgentEvent[]>();
+  for (const ev of items) if (ev.sub && merged.has(ev.sub)) kids.set(ev.sub, [...(kids.get(ev.sub) ?? []), ev]);
+  const cardShown = new Set<string>();
   const flush = (last: boolean) => {
     if (current) {
       nodes.push(<StepCard key={`s${current.key}`} step={current} turnId={turnId} running={live && last} />);
@@ -201,7 +247,14 @@ export function StepCards({ items, turnId, live }: { items: AgentEvent[]; turnId
     }
   };
   items.forEach((ev, idx) => {
-    if (ev.type === "reasoning") {
+    if (ev.sub && merged.has(ev.sub)) return;
+    if (ev.type === "subagent") {
+      flush(false);
+      if (!cardShown.has(ev.id)) {
+        cardShown.add(ev.id);
+        nodes.push(<SubagentCard key={`a${ev.id}`} ev={merged.get(ev.id) ?? ev} kids={kids.get(ev.id) ?? []} turnId={turnId} live={live} />);
+      }
+    } else if (ev.type === "reasoning") {
       flush(false);
       narration = ev.text;
     } else if (ev.type === "code") {

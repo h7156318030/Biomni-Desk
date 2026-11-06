@@ -32,12 +32,12 @@ def _truncate(text: str) -> str:
 
 
 class Kernel:
-    def __init__(self, cwd: Path) -> None:
+    def __init__(self, cwd: Path, session: str = "") -> None:
         scripts = Path(sys.prefix) / "Scripts" / "python.exe"
         exe = str(scripts) if scripts.is_file() else sys.executable
         env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1", "NO_PROXY": "localhost,127.0.0.1,::1", "MPLBACKEND": "Agg",
                "MATPLOTLIBRC": str(Path(__file__).resolve().parent / "mpl"), "BIOMNI_KERNEL_CWD": str(cwd),
-               "BIOMNI_KERNEL_ROOT": str(Path(__file__).resolve().parent.parent)}
+               "BIOMNI_KERNEL_ROOT": str(Path(__file__).resolve().parent.parent), "BIOMNI_KERNEL_SESSION": session}  # the session names the task whose permission questions this kernel raises
         self.proc = subprocess.Popen([exe, "-X", "utf8", str(SERVER)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                      text=True, encoding="utf-8", errors="replace", cwd=str(cwd), env=env, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         self.lines: queue.Queue[dict] = queue.Queue()
@@ -130,7 +130,7 @@ class Pool:
                 while len(self._kernels) >= MAX_KERNELS:
                     oldest = min(self._kernels, key=lambda x: self._kernels[x].last_used)
                     self._kernels.pop(oldest).kill()
-                k = Kernel(cwd)
+                k = Kernel(cwd, session)
                 self._kernels[session] = k
             return k, reset
 

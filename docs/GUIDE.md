@@ -2,7 +2,6 @@
 
 Biomni-Desk is a **local, bilingual research assistant for biomedicine**. You ask a question in plain language; the agent makes a plan, queries public databases and papers, runs analysis code, and answers with the sources it actually looked at. Everything runs on your own computer: conversations, results, settings and keys stay in a folder on your machine.
 
-![Biomni-Desk home page](images/01-home.png)
 
 ---
 
@@ -63,13 +62,11 @@ Biomedical questions usually need several sources: a gene's function in UniProt,
 
 **2. Plan.** A simple question runs directly. A complex one shows *Confirm the plan before it runs*: the clarifying questions the agent needs answered, the numbered steps, and three buttons: *Approve and run*, *Skip the plan and run directly*, and *Cancel*.
 
-![Plan review for a complex question](images/03-plan-review.png)
 
 **3. Run.** The agent works through the steps. *Show working steps* expands the log of every tool call. Figures, tables and files it produces appear in the *Results* panel on the right.
 
 **4. Answer.** The answer appears with its references, the *Sources* panel (every page and record the agent read), and three follow-up questions.
 
-![A finished answer with sources and follow-up questions](images/04-answer.png)
 
 The sources panel lists everything the agent read, including low-quality pages. Read the answer together with the sources, and check the important numbers in the primary records.
 
@@ -93,17 +90,14 @@ The mode switch sits above the question box:
 
 The home page has *Explore capabilities*: cards for common tasks that start a well-formed question, filterable by field (literature, protein, structure, genetics, genomics, omics analysis, drugs, clinical, molecular biology, gene editing, analysis and plots). *Recent tasks* lists your last questions. The left column shows the current **project** (the default is *Quick task*), your history, and your **Drive**: files you upload and results you publish.
 
-![The home page in English](images/01-home.png)
 
 The **中文** button at the bottom-left switches the whole interface to Chinese; the agent still answers in the language of each question.
 
-![The home page in Chinese](images/02-home-zh.png)
 
 ### The history sidebar
 
 Every conversation is listed by date. Search, double-click a title to rename it, or open *More actions* to pin, rename or delete it.
 
-![History sidebar](images/05-history.png)
 
 ### Results, to-do and sources
 
@@ -113,13 +107,11 @@ While a task runs, the right-hand panels fill in: **To-do** shows the plan and t
 
 The Skills page lists the built-in manuals and any you write yourself. Filter by source (all, mine, built-in) or by category, search by name, enable or disable a skill, and use **+ New skill** to add one. Enabled skills are used automatically when a question needs them.
 
-![Skills page](images/06-skills.png)
 
 ### Resources
 
 Resources shows what the agent can use on this computer: **Tools** (with their tested status: available, conditional, restricted or missing dependencies), **Datasets** and **Packages**. The status tells you when a tool needs software that is not installed, so you know why it cannot run.
 
-![Resources page](images/07-resources.png)
 
 ### Pipelines
 
@@ -130,13 +122,11 @@ The Pipelines page is for analyses you want to repeat. It offers:
 - **Check before running**: check a pipeline for problems before you run it on a cluster;
 - an **nf-core catalogue** (fetchngs, rnaseq, sarek, scrnaseq, chipseq and more). Pipelines run on your own computer and need Nextflow and Docker or Conda; the agent checks these first and says what to install.
 
-![Pipelines page](images/08-pipelines.png)
 
 ### Settings
 
 Settings is grouped into Account (Profile), Workspace (Personalisation, Projects, Models, Agent, Remember and database, Usage) and Data (Connections, Data and privacy). Models and providers are described in [section 7](#7-models-and-settings).
 
-![Settings page](images/09-settings.png)
 
 ---
 
@@ -198,7 +188,6 @@ Biomni-Desk does not come with a model. You choose one:
 
 Keys are stored only on your computer and sent only to the provider you configured. The Settings page never shows a key after you save it.
 
-![Fresh install: no model is set up yet](images/10-first-run.png)
 
 **First run.** Until a model is set up, the page says *No model is set up yet*, and the question box is disabled. This is intentional: the app will not try a model it cannot reach.
 

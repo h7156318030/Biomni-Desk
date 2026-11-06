@@ -124,12 +124,12 @@ class OpenAlexMixedProfile(unittest.TestCase):
             return {"title": title, "publication_year": 2026, "primary_location": {"source": {"display_name": "J"}}, "doi": None, "cited_by_count": 0,
                     "type": "article", "authorships": [{"author": {"id": "https://openalex.org/A1"}, "institutions": [{"display_name": inst}]}]}
 
-        payload = {"results": [work("TIL study", "Example Bio"), work("Manganese neurotoxicity", "University of Georgia")]}
+        payload = {"results": [work("TIL study", "Juncell"), work("Manganese neurotoxicity", "University of Georgia")]}
         with mock.patch.object(lit, "_get", return_value=mock.Mock(json=lambda: payload)):
             out = lit.openalex_author_works("A1")
         self.assertTrue(out.startswith("⚠"))
         self.assertIn("Affiliation on this paper: University of Georgia", out)
-        self.assertIn("Affiliation on this paper: Example Bio", out)
+        self.assertIn("Affiliation on this paper: Juncell", out)
 
     def test_a_consistent_profile_has_no_warning(self):
         w = {"title": "T", "publication_year": 2026, "primary_location": None, "doi": None, "cited_by_count": 0, "type": "article",

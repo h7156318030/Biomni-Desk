@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CopyButton, EventView, PlanView, ProcessGroup } from "@/components/events";
 import { LiveDraft, StepCards } from "@/components/steps";
 import { ResultsPanel } from "@/components/results-panel";
+import { ArtifactDetail } from "@/components/artifact-detail";
+import { ModePicker } from "@/components/mode-picker";
 import { Drive } from "@/components/drive";
 import { FilePreview, PreviewContext } from "@/components/file-preview";
 import { Gallery } from "@/components/gallery";
@@ -25,13 +27,16 @@ import { relativeTime } from "@/lib/time";
 import { SlashMenu, filterCommands, promptHistory, slashQuery, type SlashCommand } from "@/components/slash";
 import { buildLedger } from "@/lib/citations";
 import { PlanDraft, type Approval, type Draft } from "@/components/plan-draft";
-import { MentionMenu, activeMention } from "@/components/mention-box";
+import { MentionMenu, activeTrigger } from "@/components/mention-box";
 import { FollowUps } from "@/components/followups";
 import { AskChoices } from "@/components/askchoices";
+import { PermissionCard } from "@/components/permission-card";
 import { ModelPicker } from "@/components/model-picker";
 import {
   cancelTask,
   createTask,
+  searchSessions,
+  type SearchHit,
   createProject,
   deleteConversation,
   getPrefs,
@@ -79,7 +84,7 @@ function mediaOf(events: TaskRecord["events"]): Artifact[] {
   }
   return out;
 }
-const PROCESS = new Set(["reasoning", "code", "observation", "notice", "tool"]);
+const PROCESS = new Set(["reasoning", "code", "observation", "notice", "tool", "subagent"]);
 
 /** Consecutive working steps are drawn together on a left rule; answers and reviews stand alone. */
 function groupEvents(events: TaskRecord["events"]) {
@@ -94,7 +99,7 @@ function groupEvents(events: TaskRecord["events"]) {
 }
 
 const REVISE_PROMPT = "Work through the independent review above point by point: for each point, check the evidence again; where it holds, correct the answer, and where it does not, say why. Then give the full revised answer and list what changed.";
-const HIDDEN = new Set(["status", "tools", "plan", "done", "suggestions", "feedback", "llm", "ask"]);
+const HIDDEN = new Set(["status", "tools", "plan", "done", "suggestions", "feedback", "llm", "ask", "permission"]);
 
 /** How a task runs: plan = the plan is approved first, then it runs without questions; ask = it plans and runs, asking when unsure; auto = no plan approval, no questions. */
 type TaskMode = "plan" | "ask" | "auto";
@@ -128,6 +133,14 @@ export default function Home() {
   const [offline, setOffline] = useState(false);
   const [convs, setConvs] = useState<ConversationSummary[]>([]);
   const [search, setSearch] = useState("");
+  const [sidebarView, setSidebarView] = useState<"project" | "time">("project");  // sessions grouped under their projects (as Claude Science), or by day
+  const [hits, setHits] = useState<SearchHit[] | null>(null);  // sessions matching the search text, across every project
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("sidebarView");
+      if (v === "time" || v === "project") setSidebarView(v);
+    } catch {}
+  }, []);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [turns, setTurns] = useState<TaskRecord[]>([]);
   const [prompt, setPrompt] = useState("");
@@ -136,7 +149,7 @@ export default function Home() {
   const [reviewing, setReviewing] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [picked, setPicked] = useState<Mention[]>([]);
-  const [menu, setMenu] = useState<{ start: number; query: string } | null>(null);
+  const [menu, setMenu] = useState<{ start: number; query: string; trigger: "@" | "#" | "/" } | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const [drawer, setDrawer] = useState<"left" | "right" | null>(null);
   const [mode, setMode] = useState<TaskMode>("ask");
@@ -156,6 +169,20 @@ export default function Home() {
   }, []);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("quick");
+  useEffect(() => {
+    const q = search.trim();
+    if (q.length < 2) {
+      setHits(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      // Project view searches every project; the day view searches the current one.
+      searchSessions(q, sidebarView === "project" ? undefined : projectId === ALL ? undefined : projectId)
+        .then((r) => setHits(r.results))
+        .catch(() => setHits([]));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [search, sidebarView, projectId]);
   const [pubVersion, setPubVersion] = useState(0);
   const saved = useSavedPrompts();
   const [hello, setHello] = useState("Hello");
@@ -164,6 +191,8 @@ export default function Home() {
     return () => clearTimeout(t);
   }, []);
   const [previewPath, setPreviewPath] = useState<string | null>(null);
+  const [detail, setDetail] = useState<{ path: string; name: string } | null>(null);  // the result file whose versions, provenance and comments are open
+  const [detailFile, setDetailFile] = useState<Artifact | null>(null);  // the result file whose versions, provenance and comments are open
   const [slashIndex, setSlashIndex] = useState(0);
   const [recall, setRecall] = useState<number | null>(null);
   const [driveVersion, setDriveVersion] = useState(0);
@@ -454,6 +483,15 @@ export default function Home() {
       setFormError(e instanceof Error ? e.message : String(e));
     }
   };
+
+  // A link from a project page ("/?open=<session id>") opens that session, then the address is tidied.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("open");
+    if (!id) return;
+    openConversation(id);
+    window.history.replaceState(null, "", "/");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const newChat = () => {
     unsub.current?.();
@@ -756,9 +794,9 @@ export default function Home() {
                 return e instanceof Error ? e.message : String(e);
               }
             }}
-            onDelete={async (id) => {
+            onDelete={async (id, mode) => {
               try {
-                setProjects(await deleteProject(id));
+                setProjects(await deleteProject(id, mode ?? "keep"));
                 selectProject("quick");
                 refreshList();
                 return null;
@@ -776,15 +814,47 @@ export default function Home() {
         >
           <span aria-hidden="true" className="text-base leading-none">＋</span> {t("New task")}
         </button>
+        <div className="mt-3 flex items-center gap-1 text-xs" role="tablist" aria-label={t("Sidebar view")}>
+          {(
+            [
+              ["project", "By project"],
+              ["time", "By day"],
+            ] as const
+          ).map(([v, label]) => (
+            <button
+              key={v}
+              type="button"
+              role="tab"
+              aria-selected={sidebarView === v}
+              onClick={() => {
+                setSidebarView(v);
+                try {
+                  localStorage.setItem("sidebarView", v);
+                } catch {}
+              }}
+              className={`rounded-full border px-2.5 py-0.5 ${sidebarView === v ? "border-accent bg-accent-soft text-accent" : "border-line text-soft hover:border-accent"}`}
+            >
+              {t(label)}
+            </button>
+          ))}
+        </div>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t("Search history")}
-          className="mt-3 rounded-lg border border-line bg-card px-3 py-1.5 text-sm outline-none placeholder:text-soft focus:border-accent"
+          className="mt-2 rounded-lg border border-line bg-card px-3 py-1.5 text-sm outline-none placeholder:text-soft focus:border-accent"
         />
         <div className="mt-2 min-h-0 flex-1 overflow-y-auto pr-0.5">
           <HistoryList
-            convs={shownConvs}
+            convs={sidebarView === "project" ? convs : shownConvs}
+            view={sidebarView}
+            hits={search.trim().length >= 2 ? hits : null}
+            activeProject={projectId}
+            onSelectProject={(id) => selectProject(id)}
+            onNewInProject={(id) => {
+              selectProject(id);
+              newChat();
+            }}
             activeId={activeId}
             query={search}
             runningId={liveId ? activeId : null}
@@ -881,6 +951,15 @@ export default function Home() {
                     }
                   }}
                 />
+                {activeId && (
+                  <a
+                    href={`/notebook?c=${encodeURIComponent(activeId)}`}
+                    title={t("Open this session as a notebook: questions, code, output and answers in order")}
+                    className="rounded-md border border-line px-2 py-0.5 text-xs text-soft hover:border-accent"
+                  >
+                    {t("Notebook")}
+                  </a>
+                )}
                 <button
                   type="button"
                   disabled={running}
@@ -1036,6 +1115,14 @@ export default function Home() {
                   {isLast && !live && ask && ask.type === "ask" && ask.options.length > 0 && (
                     <AskChoices options={ask.options} onPick={(q) => startTask(q)} />
                   )}
+                  {(() => {
+                    // A database permission the task is waiting on: shown only while it is the newest thing the task has done.
+                    const perm = [...turn.events].reverse().find((e) => e.type === "permission");
+                    if (!perm || perm.type !== "permission") return null;
+                    const after = turn.events.slice(turn.events.indexOf(perm) + 1);
+                    if (after.some((e) => ["observation", "code", "answer", "tool", "error", "cancelled", "done"].includes(e.type))) return null;  // answered: work went on
+                    return <PermissionCard taskId={turn.id} request={perm} />;
+                  })()}
                 </div>
               );
             })}
@@ -1101,10 +1188,12 @@ export default function Home() {
               {menu && (
                 <MentionMenu
                   query={menu.query}
+                  trigger={menu.trigger}
                   onClose={() => setMenu(null)}
                   onPick={(m) => {
                     const caret = input.current?.selectionStart ?? prompt.length;
-                    const next = `${prompt.slice(0, menu.start)}@${m.label} ${prompt.slice(caret)}`;
+                    const sign = m.kind === "session" ? "#" : menu.trigger === "/" ? "/" : "@";  // what the user typed stays readable in the message
+                    const next = `${prompt.slice(0, menu.start)}${sign}${m.label} ${prompt.slice(caret)}`;
                     setPrompt(next);
                     setPicked((p) => (p.some((x) => x.kind === m.kind && x.id === m.id) ? p : [...p, m]));
                     setMenu(null);
@@ -1119,7 +1208,7 @@ export default function Home() {
                   setPrompt(e.target.value);
                   setRecall(null);
                   setSlashIndex(0);
-                  setMenu(activeMention(e.target.value, e.target.selectionStart));
+                  setMenu(activeTrigger(e.target.value, e.target.selectionStart));
                 }}
                 onPaste={(e) => {
                   if (e.clipboardData.files.length) {
@@ -1127,7 +1216,7 @@ export default function Home() {
                     attachFiles(e.clipboardData.files);
                   }
                 }}
-                onClick={(e) => setMenu(activeMention(prompt, e.currentTarget.selectionStart))}
+                onClick={(e) => setMenu(activeTrigger(prompt, e.currentTarget.selectionStart))}
                 onKeyDown={(e) => {
                   if (e.nativeEvent.isComposing) return;
                   if (slashItems.length > 0 && !menu) {
@@ -1197,22 +1286,7 @@ export default function Home() {
                 >
                   {saved.items.includes(prompt.trim()) ? "★" : "☆"}
                 </button>
-                <div role="radiogroup" aria-label={t("Task mode")} className="flex items-center gap-0.5 rounded-full border border-line bg-card p-0.5 text-xs">
-                  {TASK_MODES.map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={mode === m.id}
-                      title={t(m.hint)}
-                      disabled={running}
-                      onClick={() => setTaskMode(m.id)}
-                      className={`rounded-full px-2.5 py-1 transition disabled:opacity-50 ${mode === m.id ? "bg-accent-soft font-medium text-accent" : "text-soft hover:text-ink"}`}
-                    >
-                      {t(m.label)}
-                    </button>
-                  ))}
-                </div>
+                <ModePicker mode={mode} options={TASK_MODES} disabled={running} onPick={(id) => setTaskMode(id as TaskMode)} />
                 <button
                   type="button"
                   disabled={running}
@@ -1220,7 +1294,7 @@ export default function Home() {
                   onClick={() => {
                     const at = prompt.length;
                     setPrompt((p) => `${p}@`);
-                    setMenu({ start: at, query: "" });
+                    setMenu({ start: at, query: "", trigger: "@" });
                     input.current?.focus();
                   }}
                   className="rounded-full border border-accent/60 bg-accent-soft px-3 py-1 text-xs font-medium text-accent hover:border-accent disabled:opacity-40"
@@ -1280,8 +1354,12 @@ export default function Home() {
             artifacts={artifacts}
             onOpen={(a) => setPreviewPath(a.path)}
             onViewSource={viewSource}
+            onDetails={(a) => setDetailFile(a)}
             onRefresh={activeId && !running ? reloadConversation : undefined}
           />
+          {detailFile && activeId && (
+            <ArtifactDetail conversationId={activeId} path={detailFile.path} name={detailFile.name} onClose={() => setDetailFile(null)} />
+          )}
         </SideSection>
         )}
         {panels.sources && (

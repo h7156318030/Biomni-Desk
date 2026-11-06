@@ -11,7 +11,51 @@ from pathlib import Path
 from typing import Any
 
 SOURCES = {"Codex": "ChatGPT (log in in Settings)", "Custom": "OpenAI-compatible API (such as OpenRouter)"}
-KEYS = ("source", "model", "model_id", "use_tool_retriever", "commercial_mode", "reasoning_effort")
+ROLE_KEYS = ("planner_model_id", "subagent_model_id", "reviewer_model_id", "image_model_id")  # a saved model id, or None (same as the main model)
+ROLE_EFFORT_KEYS = ("planner_effort", "subagent_effort", "reviewer_effort")  # a reasoning level, or None (the role's default)
+COUNT_KEYS = {"subagent_max": (1, 6), "memory_recall_chars": (300, 6000)}  # whole numbers within these bounds
+BOOL_KEYS = ("memory_auto",)  # suggest lasting facts after a finished task
+KEYS = ("source", "model", "model_id", "use_tool_retriever", "commercial_mode", "reasoning_effort", *ROLE_KEYS, *ROLE_EFFORT_KEYS, *COUNT_KEYS, *BOOL_KEYS)
+DEFAULTS: dict[str, Any] = {"subagent_max": 3, "memory_recall_chars": 1500, "memory_auto": True}
+
+
+def validate_roles(values: dict[str, Any], model_ids: set[str], efforts: set[str]) -> dict[str, Any]:
+    """The models and reasoning levels for the roles (planner, sub-agents, reviewer, image), how many sub-agents run at once, and the
+    memory switches. Only the keys sent are checked and returned."""
+    out: dict[str, Any] = {}
+    for k in ROLE_KEYS:
+        if k not in values:
+            continue
+        v = values[k]
+        if v in (None, ""):
+            out[k] = None
+        elif str(v) in model_ids:
+            out[k] = str(v)
+        else:
+            raise ValueError("That model is not saved. Pick one from the list, or choose “same as the main model”.")
+    for k in ROLE_EFFORT_KEYS:
+        if k not in values:
+            continue
+        v = values[k]
+        if v in (None, ""):
+            out[k] = None
+        elif str(v) in efforts:
+            out[k] = str(v)
+        else:
+            raise ValueError("That reasoning level is not offered.")
+    for k, (lo, hi) in COUNT_KEYS.items():
+        if k not in values:
+            continue
+        v = values[k]
+        if not isinstance(v, int) or isinstance(v, bool) or not lo <= v <= hi:
+            raise ValueError(f"{k} must be a whole number from {lo} to {hi}.")
+        out[k] = v
+    for k in BOOL_KEYS:
+        if k in values:
+            if not isinstance(values[k], bool):
+                raise ValueError(f"{k} must be true or false")
+            out[k] = values[k]
+    return out
 
 
 def load(path: Path) -> dict[str, Any]:
@@ -20,6 +64,11 @@ def load(path: Path) -> dict[str, Any]:
     except (OSError, ValueError):
         return {}
     return {k: data[k] for k in KEYS if k in data}
+
+
+def get(path: Path, key: str) -> Any:
+    """A stored value, or its default when nothing is stored."""
+    return load(path).get(key, DEFAULTS.get(key))
 
 
 def validate(values: dict[str, Any], *, custom_ready: bool) -> dict[str, Any]:

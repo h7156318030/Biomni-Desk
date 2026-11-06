@@ -158,7 +158,7 @@ ALL_TOOLS: list[dict[str, Any]] = [
     },
 ]
 
-_CORE = {"bash", "python", "todo", "ask_user"}
+_CORE = {"bash", "python", "todo", "ask_user", "delegate_task", "propose_memory"}
 
 
 def active_tools() -> list[dict[str, Any]]:
@@ -209,6 +209,120 @@ ASK_USER_SPEC: dict[str, Any] = {
     },
 }
 ALL_TOOLS.append(ASK_USER_SPEC)
+
+SUB_STEPS = 12  # a sub-agent takes at most this many tool steps, then must answer from what it has
+DELEGATE_SPEC: dict[str, Any] = {
+    "type": "function",
+    "name": "delegate_task",
+    "description": ("Start one self-contained sub-task on a sub-agent. It runs in the background, in parallel with you (several can run at once), "
+                    f"with its own tools (web search, databases, Python; up to {SUB_STEPS} steps), and its short result with sources arrives as a message "
+                    "when it finishes. Its working steps stay out of this conversation. It cannot ask you questions, so put everything it needs in "
+                    "`task`: what to find or compute, which sources, and the exact form of the result. Hand off each piece that takes several steps and "
+                    "does not depend on your other steps, so that the work runs side by side; keep the quick steps for yourself."),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string", "description": "A short human title of this step, in the user's language."},
+            "task": {"type": "string", "description": "The sub-task, fully specified: what to find or compute, and what the result must contain."},
+            "context": {"type": "string", "description": "Anything the sub-agent needs that is not in the task (identifiers, earlier results). Optional."},
+        },
+        "required": ["title", "task"],
+        "additionalProperties": False,
+    },
+}
+ALL_TOOLS.append(DELEGATE_SPEC)
+
+WAIT_SPEC: dict[str, Any] = {
+    "type": "function",
+    "name": "wait_subagents",
+    "description": ("Wait for the sub-agents you started with delegate_task and get their results now. Leave `ids` out to wait for all of them. "
+                    "Use it only when your next step needs a result. Otherwise keep working: a result that finishes meanwhile arrives as a message."),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string", "description": "A short human title of this step, in the user's language."},
+            "ids": {"type": "array", "items": {"type": "string"}, "description": "The sub-agent ids returned when they were started (for example sub-1). Optional."},
+        },
+        "required": ["title"],
+        "additionalProperties": False,
+    },
+}
+
+PROPOSE_MEMORY_SPEC: dict[str, Any] = {
+    "type": "function",
+    "name": "propose_memory",
+    "description": ("Suggest one fact or standing preference for the user's memory, for example a species, a unit convention or a standing rule "
+                    "the user has stated. It is not used until the user approves it in Settings. Use it rarely: only for something the user said "
+                    "that should hold in later tasks. Never propose personal data, credentials or anything you only guessed."),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string", "description": "A short human title of this step, in the user's language."},
+            "text": {"type": "string", "description": "The note, one short sentence, in the user's language (at most 300 characters)."},
+        },
+        "required": ["title", "text"],
+        "additionalProperties": False,
+    },
+}
+ALL_TOOLS.append(PROPOSE_MEMORY_SPEC)
+
+
+FORWARDED = ("code", "observation", "tool", "reasoning")  # what a sub-agent shows in the session, under its own card
+
+
+LOOK_SPEC: dict[str, Any] = {
+    "type": "function",
+    "name": "look_at_image",
+    "description": ("Look at one picture file (png, jpg, gif or webp) and answer a question about it. An image model reads the picture and "
+                    "returns its text answer; the picture itself is not shown to you. Use it for any picture the user uploaded and for any "
+                    "figure you produced that you need to check. Give the file path as it appears in the file locations."),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string", "description": "A short human title of this step, in the user's language."},
+            "path": {"type": "string", "description": "The picture's file path."},
+            "question": {"type": "string", "description": "What to find out or describe in the picture."},
+        },
+        "required": ["title", "path"],
+        "additionalProperties": False,
+    },
+}
+
+
+def _delegate(task: str, context: str, *, model: str, effort: str, instructions: str, cancel: Callable[[], bool], cwd: Path,
+              load_skill: Callable[[str], str] | None, find_skill: Callable[[str], str] | None, call: Callable[..., Any],
+              permit: Callable[[str, str], str] | None = None, emit: Callable[[dict[str, Any]], None] | None = None) -> str:
+    """Run one sub-task as a separate pass of the same loop: its own history, its own step cap, no questions to the user, and no
+    sub-agents of its own. The session shows it as a card: a "subagent" event when it starts and when it ends, and its steps
+    tagged with its id. Only its final answer goes back to the main agent."""
+    from biomni_ui import pykernel
+
+    sid = f"sub-{time.time_ns()}"
+    question = f"Sub-task from the main agent:\n{task.strip()}"
+    if context.strip():
+        question += f"\n\nContext from the main agent:\n{context.strip()}"
+    question += "\n\nGive the result the task asks for, and name the sources or tool outputs it rests on. Keep it short."
+
+    def forward(event: dict[str, Any]) -> None:
+        if emit is not None and event.get("type") in FORWARDED:
+            emit({**event, "sub": sid})
+
+    if emit is not None:
+        emit({"type": "subagent", "id": sid, "status": "running", "task": task.strip()[:400], "steps": 0})
+    try:
+        answer, _items, steps = _run_loop(sess=sid, model=model, effort=effort, question=question, history=[], instructions=instructions,
+                                          emit=forward, cancel=cancel, cwd=cwd, load_skill=load_skill, find_skill=find_skill, call=call,
+                                          tools_fn=lambda: [t for t in active_tools() if t.get("name") != "delegate_task"], allow_ask=False,
+                                          max_steps=SUB_STEPS, permit=permit, allow_subagents=False)
+    except Exception as e:  # reported to the main agent and shown on the card; the main task goes on
+        if emit is not None:
+            emit({"type": "subagent", "id": sid, "status": "failed", "steps": 0, "answer": f"{type(e).__name__}: {str(e)[:200]}"})
+        return f"[sub-agent failed: {type(e).__name__}]"
+    finally:
+        pykernel.POOL.close(sid)
+    if emit is not None:
+        emit({"type": "subagent", "id": sid, "status": "done", "steps": steps, "answer": (answer or "").strip()[:1500]})
+    return f"[sub-agent finished in {steps} steps]\n{(answer or '').strip() or 'The sub-agent gave no answer.'}"[:6000]
 
 SEARCH_FUNCS: list[dict[str, Any]] = [
     {
@@ -265,7 +379,7 @@ When a question arrives, first decide how to proceed. Base the decision on the c
 
 Execution
 - Prefer ready-made, trustworthy sources (official databases, NCBI, UniProt, ChEMBL, company websites). Do not reconstruct APIs from memory: when an API format is unfamiliar, check the official documentation before writing the call. When something fails, first decide what kind of failure it is. A parameter or syntax error: correct it and retry, trying a few variants before concluding. A service that is down: switch to another source, or say so. Ask the user only about their preferences or costs (budget, whether to continue). Decide purely technical fixes yourself.
-- Tools: `web_search` (to learn what something is and its current status; `queries` is an array that runs several keyword searches in parallel). `python`: one persistent Python session (variables and imports persist between steps; only the first call waits for libraries to load); use it for analysis, plots and calling specialist functions. `bash`: command line, curl, file management. `todo`: a plan checklist. This applies in every round, not only the first. When several steps do not depend on each other, issue them together in the same round instead of one at a time: for several keywords use the `queries` array of web_search; for several pages use the `urls` array of read_webpage; for several independent commands or database queries, issue all the calls in the same round (the system runs them at the same time, which is much faster). Split into rounds only when a later step needs an earlier step's result. Before each round, ask which remaining steps do not depend on this step's result, and issue those now rather than leaving them for the next round.
+- Tools: `web_search` (to learn what something is and its current status; `queries` is an array that runs several keyword searches in parallel). `python`: one persistent Python session (variables and imports persist between steps; only the first call waits for libraries to load); use it for analysis, plots and calling specialist functions. `bash`: command line, curl, file management. `todo`: a plan checklist. `delegate_task`: start one self-contained sub-task (for example, check one database for a list of genes, or read and summarise one long paper) on a sub-agent with its own steps. It runs in the background, in parallel with you, and its short result arrives as a message when it finishes; its working steps stay out of this conversation. Plan so that independent parts run side by side: as soon as you see parts that do not depend on each other, start each one as a sub-agent in the same round, give each everything it needs in `task` (what to find, which sources, the exact form of the result), and keep working on the parts you do yourself. Call `wait_subagents` only when your next step needs a result. Do not hand off a quick step you must see yourself. This applies in every round, not only the first. When several steps do not depend on each other, issue them together in the same round instead of one at a time: for several keywords use the `queries` array of web_search; for several pages use the `urls` array of read_webpage; for several independent commands or database queries, issue all the calls in the same round (the system runs them at the same time, which is much faster). Split into rounds only when a later step needs an earlier step's result. Before each round, ask which remaining steps do not depend on this step's result, and issue those now rather than leaving them for the next round.
 - Skills: before a specialist analysis, or before querying a type of database, search the skill manuals by keyword with `find_skills` (for example "target druggability" or "scRNA trajectory"). When a suitable one turns up, load its full text by id with `use_skill`. If none fits, use a function or web search directly.
 - Biomni's specialist functions are imported and called directly in `python` (modules are grouped by field under `biomni.tool`). The task instructions list the functions relevant to the question, with import paths and required parameters, and the relevant skills. Call the listed ones directly: import first, assign the result and print it. Do not guess function names from memory. For any other function, search with `find_tools('English keywords')`. `biomni_ui.dbtools` and `biomni_ui.lit` are fast database and literature functions.
 - {STYLE}
@@ -481,6 +595,16 @@ def todo_steps(items: Any) -> list[dict[str, str]]:
     return out[:12]
 
 
+def _receipt(cwd: Path, fc: dict[str, Any], arguments: Any, result: str, t0: float, files: list[str] | None = None) -> dict[str, Any] | None:
+    """The receipt for one tool call (see receipts.py). Never raises: a receipt that cannot be written must not stop the task."""
+    from biomni_ui import receipts
+
+    try:
+        return receipts.record(cwd, fc.get("call_id"), str(fc.get("name")), arguments, result, time.time() - t0, files)
+    except Exception:
+        return None
+
+
 def evidence_text(items: list[dict[str, Any]], question: str = "") -> str:
     """What the model was shown or fetched: the question, what its commands and searches returned, and the user's own messages.
 
@@ -616,6 +740,43 @@ class Conversations:
             start = next((i for i, it in enumerate(kept) if it.get("type") == "message" and it.get("role") == "user"), None)
             kept = kept[start:] if start is not None else []
         self._items[conversation_id] = kept
+
+
+RESUME_DIR = Path(__file__).resolve().parent.parent / "ui_data" / "resume"  # the work of a task that was cut short, kept so that "continue" can pick it up
+
+
+def resume_path(conversation_id: str) -> Path:
+    safe = re.sub(r"[^A-Za-z0-9_-]", "", str(conversation_id))[:80] or "conversation"
+    return RESUME_DIR / f"{safe}.json"
+
+
+def complete_exchange(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The items with every tool call that has its result (a call cut off before its result is dropped: the model could not resume it)."""
+    answered = {str(i.get("call_id")) for i in items if i.get("type") == "function_call_output"}
+    return [i for i in items if i.get("type") != "function_call" or str(i.get("call_id")) in answered]
+
+
+def save_resume(conversation_id: str, items: list[dict[str, Any]]) -> None:
+    path = resume_path(conversation_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"items": items}, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(path)
+
+
+def load_resume(conversation_id: str) -> list[dict[str, Any]]:
+    try:
+        data = json.loads(resume_path(conversation_id).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return complete_exchange([i for i in data.get("items", []) if isinstance(i, dict)])
+
+
+def clear_resume(conversation_id: str) -> None:
+    try:
+        resume_path(conversation_id).unlink()
+    except OSError:
+        pass
 
 
 _PREAMBLE = re.compile(r"^\s*((?:我先|我再|我会|我来|我将|我去|我这就|让我|先)[^。\n]{2,200}。|我(?:查|搜|找|看|核对|检索|确认|读|读取|下载|画|整理)(?:一下|一查)[^。\n]{0,200}。|(?:First(?:ly)?,? I(?:'ll| will)|Let me|Now I(?:'ll| will)|I(?:'ll| will) (?:now )?(?:search|check|verify|read|download|plot|look|fetch|confirm))[^.\n]{2,200}\.)\s*", re.I)
@@ -860,6 +1021,29 @@ def _fetch_one(fc: dict[str, Any]) -> Any:
     return None
 
 
+class _Done:
+    """A result that is already known (a refused call): same interface as _Later."""
+
+    def __init__(self, value: Any):
+        self._value = value
+
+    def result(self) -> Any:
+        return self._value
+
+
+def _gated_tool(fc: dict[str, Any]) -> str | None:
+    """The database connector a call would query, or None for calls that are not database calls."""
+    from biomni_ui import connectors
+
+    name = str(fc.get("name") or "")
+    if name == "run_tool":  # called by name: the tool is in the arguments
+        try:
+            name = str(json.loads(fc.get("arguments") or "{}").get("name") or "").strip()
+        except ValueError:
+            return None
+    return name if connectors.group_of(name) else None
+
+
 class _Later:
     """One lookup running on its own thread; .result() waits for it."""
 
@@ -881,6 +1065,92 @@ class _Later:
         return self._value
 
 
+class SubPool:
+    """The sub-agents of one run. Each runs on its own thread, at most `workers` at once (the rest queue), while the main loop goes on.
+    A result is handed over once: `ready()` gives the ones that have finished, `wait()` blocks until the chosen ones have finished."""
+
+    def __init__(self, workers: int):
+        from concurrent.futures import ThreadPoolExecutor
+
+        self._ex = ThreadPoolExecutor(max_workers=max(1, int(workers or 1)), thread_name_prefix="sub-agent")
+        self._jobs: dict[str, dict[str, Any]] = {}
+        self._count = 0
+        self._lock = threading.Lock()
+        self.stopped = False  # set when the run ends: running sub-agents stop at their next step
+
+    def start(self, fn: Callable[[], str], task: str, title: str) -> str:
+        """Queue one sub-agent; returns the text the main agent sees at once."""
+        with self._lock:
+            self._count += 1
+            sid = f"sub-{self._count}"
+            self._jobs[sid] = {"task": " ".join(task.split())[:200], "future": self._ex.submit(fn), "delivered": False}
+        return (f"Started sub-agent {sid} for “{title or task[:60]}”. It runs in parallel with you, and its result arrives as a message when it finishes. "
+                "Keep working on the steps that do not need it; call wait_subagents only when you need its result now.")
+
+    def pending(self) -> bool:
+        with self._lock:
+            return any(not j["delivered"] for j in self._jobs.values())
+
+    def _text(self, job: dict[str, Any]) -> str:
+        fut = job["future"]
+        if fut.cancelled():
+            return "[sub-agent cancelled before it started]"
+        try:
+            return str(fut.result())
+        except Exception as e:  # reported like any finished result: the run goes on
+            return f"[sub-agent failed: {type(e).__name__}]"
+
+    def _take(self, ids: list[str] | None, only_done: bool) -> list[tuple[str, str, str]]:
+        """The results of the chosen sub-agents that are not delivered yet, marked delivered. Unknown ids are ignored."""
+        out = []
+        with self._lock:
+            for sid, job in self._jobs.items():
+                if job["delivered"] or (ids is not None and sid not in ids):
+                    continue
+                if only_done and not job["future"].done():
+                    continue
+                job["delivered"] = True
+                out.append((sid, job["task"], self._text(job)))
+        return out
+
+    def ready(self) -> list[tuple[str, str, str]]:
+        """The results that have finished since the last call (never blocks)."""
+        return self._take(None, only_done=True)
+
+    def wait(self, ids: list[str] | None, cancel: Callable[[], bool]) -> list[tuple[str, str, str]]:
+        """Block until the chosen sub-agents (all of them when ids is None) have finished, or the run is cancelled; returns their results."""
+        from concurrent.futures import wait as wait_futures
+
+        while not cancel() and not self.stopped:
+            with self._lock:
+                running = [j["future"] for _sid, j in self._selected(ids) if not j["future"].done()]
+            if not running:
+                break
+            wait_futures(running, timeout=0.5)
+        out = []
+        with self._lock:
+            for sid, job in self._selected(ids):
+                if job["future"].done():
+                    job["delivered"] = True  # asked for by name: returned even if it was already passed on as a message
+                    out.append((sid, job["task"], self._text(job)))
+        return out
+
+    def _selected(self, ids: list[str] | None) -> list[tuple[str, dict[str, Any]]]:
+        """Named sub-agents (even if already delivered), or, with no names, those not yet delivered. Call with the lock held."""
+        return [(sid, j) for sid, j in self._jobs.items() if (ids is None and not j["delivered"]) or (ids is not None and sid in ids)]
+
+    def close(self) -> None:
+        self.stopped = True
+        self._ex.shutdown(wait=False, cancel_futures=True)
+
+
+def results_message(found: list[tuple[str, str, str]]) -> dict[str, Any]:
+    """The finished sub-agent results as one message for the main agent."""
+    blocks = [f"### {sid} — {task}\n{text}" for sid, task, text in found]
+    return {"type": "message", "role": "user", "content": [{"type": "input_text", "text": (
+        "Sub-agent results (they finished while you worked; use them in your answer, and say where a result is missing):\n\n" + "\n\n".join(blocks))}]}
+
+
 def run(*, session: str | None = None, **kw: Any) -> tuple[str, list[dict[str, Any]], int]:
     """Drive the loop (see _run_loop). `session` names the Python session the `python` tool keeps (the conversation id: variables and
     imports survive between questions); without one the session lives only for this call."""
@@ -895,12 +1165,29 @@ def run(*, session: str | None = None, **kw: Any) -> tuple[str, list[dict[str, A
             pykernel.POOL.close(sess)
 
 
-def _run_loop(*, sess: str, model: str, effort: str, question: str, history: list[dict[str, Any]], instructions: str, emit: Callable[[dict[str, Any]], None],
-              cancel: Callable[[], bool], cwd: Path, load_skill: Callable[[str], str] | None = None, find_skill: Callable[[str], str] | None = None, on_text: Callable[[str], None] | None = None,
-              nudge: Callable[[str, int], str | None] | None = None, escalate_to: str | None = None, call: Callable[..., Any] = call_model,
-              tools_fn: Callable[[], list[dict[str, Any]]] | None = None, mid_effort: str | None = None, allow_ask: bool = True) -> tuple[str, list[dict[str, Any]], int]:
+def _run_loop(*, max_parallel: int = 3, allow_subagents: bool = True, **kw: Any) -> tuple[str, list[dict[str, Any]], int]:
+    """The agent loop (see _run_loop_body). Sub-agents started in it run in a pool that is stopped when the loop ends, however it ends."""
+    pool = SubPool(max_parallel) if allow_subagents else None
+    try:
+        return _run_loop_body(pool=pool, allow_subagents=allow_subagents, **kw)
+    finally:
+        if pool is not None:
+            pool.close()
+
+
+def _run_loop_body(*, sess: str, model: str, effort: str, question: str, history: list[dict[str, Any]], instructions: str, emit: Callable[[dict[str, Any]], None],
+                   cancel: Callable[[], bool], cwd: Path, load_skill: Callable[[str], str] | None = None, find_skill: Callable[[str], str] | None = None, on_text: Callable[[str], None] | None = None,
+                   nudge: Callable[[str, int], str | None] | None = None, escalate_to: str | None = None, call: Callable[..., Any] = call_model,
+                   tools_fn: Callable[[], list[dict[str, Any]]] | None = None, mid_effort: str | None = None, allow_ask: bool = True,
+                   max_steps: int | None = None, project_id: str | None = None,
+                   permit: Callable[[str, str], str] | None = None, delegate_model: str | None = None,
+                   delegate_call: Callable[..., Any] | None = None, delegate_effort: str | None = None,
+                   image_call: Callable[[str, str], str] | None = None, pool: "SubPool | None" = None,
+                   allow_subagents: bool = True, checkpoint: Callable[[list[dict[str, Any]]], None] | None = None) -> tuple[str, list[dict[str, Any]], int]:
     """Returns (answer, items to remember, number of steps taken). `nudge(answer, steps)` may return a message that
-    sends the model back to work (an answer that gave up too early)."""
+    sends the model back to work (an answer that gave up too early). Sub-agents asked for in one round run side by side (at most
+    `max_parallel` at once) while this loop's own commands and lookups carry on. `image_call(path, question)` is offered as the
+    look_at_image tool when the image model is set."""
     from biomni_ui import chatgpt_api as c
     from biomni_ui import pykernel, workdir
 
@@ -924,6 +1211,11 @@ def _run_loop(*, sess: str, model: str, effort: str, question: str, history: lis
             last_report[0] = key
             emit(payload)
     def offered(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        tools = [t for t in tools if t.get("name") not in ("look_at_image", "wait_subagents")]
+        tools += [LOOK_SPEC] if image_call is not None else []  # the picture tool only when an image model is set
+        tools += [WAIT_SPEC] if pool is not None else []  # waiting for sub-agents only where they can run
+        if not allow_subagents:
+            tools = [t for t in tools if t.get("name") != "delegate_task"]
         return tools if allow_ask else [t for t in tools if t.get("name") != "ask_user"]  # the question tool is offered only when the mode allows it
 
     docs = Docs()
@@ -932,6 +1224,14 @@ def _run_loop(*, sess: str, model: str, effort: str, question: str, history: lis
     while True:  # no step limit: the loop ends when the model answers, the judge says enough, the user stops it, or it is going round in circles
         if cancel():
             return "", items, steps
+        if max_steps is not None and steps >= max_steps:
+            enough = True  # a capped run (a sub-agent) has used its steps: the next round is an answer, with no more tools
+        if checkpoint is not None:  # what has happened so far is kept, so a cut-off task can be continued
+            checkpoint(items)
+        if pool is not None:
+            finished = pool.ready()  # sub-agents that finished meanwhile reach the model before its next round
+            if finished:
+                items.append(results_message(finished))
         # One level for every call on the answer path: the chosen level, never below the starting tier (see effort.FLOOR).
         worked = any(i.get("type") == "function_call_output" for i in items[len(history):])
         now = (mid_effort or effort) if worked and not nudges else effort
@@ -979,6 +1279,14 @@ def _run_loop(*, sess: str, model: str, effort: str, question: str, history: lis
             report()
             text = (said + "\n\n" if said else "") + question
             return clean_answer(docs.link(text), cwd), [i for i in items if not (i.get("type") == "message" and HINT_MARK in message_text(i))], steps
+        if not calls and pool is not None and pool.pending():
+            # the answer waits for the sub-agents that are still running, and they go to the model together with the answer's draft
+            if cancel():
+                return "", items, steps
+            waited = pool.wait(None, cancel)
+            if waited:
+                items.append(results_message(waited))
+                continue
         if not calls:
             if not said:
                 return "", items, steps
@@ -1000,7 +1308,14 @@ def _run_loop(*, sess: str, model: str, effort: str, question: str, history: lis
         # Lookups (searches, page reads, tool calls) start together and run while the commands and Python steps of the same turn work through
         # in order (they share the files and the Python session); each card appears in order once its result is in.
         lookups = [fc for fc in calls if fc.get("name") in _PARALLEL]
-        futures = {str(fc.get("call_id")): _Later(_fetch_one, fc) for fc in lookups}
+        refused: dict[str, str] = {}
+        if permit is not None:  # a database connector needs the user's permission (or a standing grant) before it is queried
+            for fc in lookups:
+                tool = _gated_tool(fc)
+                if tool and permit(tool, str(fc.get("call_id"))) != "allow":
+                    refused[str(fc.get("call_id"))] = (f"The user did not allow the database “{tool}” for this request, so it was not queried. "
+                                                      "Carry on without it, or say what is missing.")
+        futures = {str(fc.get("call_id")): (_Done(refused[str(fc.get("call_id"))]) if str(fc.get("call_id")) in refused else _Later(_fetch_one, fc)) for fc in lookups}
         shell = [fc for fc in calls if fc.get("name") == "bash"]
         if len(shell) > 1:  # several commands in one turn were asked for together: they are independent, so they run together
             for fc in shell:
@@ -1010,6 +1325,18 @@ def _run_loop(*, sess: str, model: str, effort: str, question: str, history: lis
                     cmd = ""
                 lookups.append(fc)
                 futures[str(fc.get("call_id"))] = _Later(run_bash, cmd, cwd, cancel)
+
+        # Sub-agents asked for in this round start now, side by side (at most max_parallel at once), and run while the commands and lookups
+        # of the round work through in order; their results come back in the order the model asked for them.
+        def run_delegate(fc: dict[str, Any], args: dict[str, Any]) -> str:
+            """One sub-agent, run to its end (in the pool's thread, or here when sub-agents are not allowed)."""
+            task_text = str(args.get("task") or "")
+            title = str(args.get("title") or "").strip()
+            emit({"type": "code", "language": "text", "code": (f"# {title}\n" if title else "") + f"delegate_task({task_text[:200]!r})"})
+            # the sub-agent runs on its own model when one is chosen in Settings, otherwise on the same model as this task, at its own effort
+            return _delegate(task_text, str(args.get("context") or ""), model=delegate_model or model, effort=delegate_effort or effort, instructions=instructions,
+                             cancel=lambda: cancel() or (pool is not None and pool.stopped), cwd=cwd, load_skill=load_skill, find_skill=find_skill,
+                             call=delegate_call or call, permit=permit, emit=emit)
 
         class _Ahead(dict):
             def __contains__(self, key):
@@ -1079,7 +1406,13 @@ def _run_loop(*, sess: str, model: str, effort: str, question: str, history: lis
             elif fc.get("name") == "python":
                 code = str(args.get("code") or "")
                 emit({"type": "code", "language": "python", "code": (f"# {title}\n" if title else "") + code})
-                result = pykernel.run(sess, code, cwd, cancel)
+                from biomni_ui import permissions  # database calls made from this Python step are answered here, while it runs
+                serving = threading.Event()
+                threading.Thread(target=permissions.serve, args=(sess, lambda tool: permit(tool, "python") if permit is not None else "allow", serving), daemon=True).start()
+                try:
+                    result = pykernel.run(sess, code, cwd, cancel)
+                finally:
+                    serving.set()
                 if "cannot import name" in result and "find_tools" in result:  # imported from the wrong module: it is already in the session
                     result += "\n" + "Note: find_tools is already preloaded in python; call find_tools('English keywords') directly, with no import."
             elif fc.get("name") == "web_search":
@@ -1097,6 +1430,7 @@ def _run_loop(*, sess: str, model: str, effort: str, question: str, history: lis
                 emit({"type": "tool", **card})
                 workdir.add_references(cwd, query, card["results"])
                 workdir.add_note(cwd, f"**Web search**: {query}" + chr(10) * 2 + chr(10).join(f"- {r['url']}" for r in rows[:8]))
+                _receipt(cwd, fc, args, result, t0)
                 items.append({"type": "function_call_output", "call_id": fc.get("call_id"), "output": result})
                 continue  # the search card shows the results; no extra observation card
             elif fc.get("name") == "read_webpage":
@@ -1115,6 +1449,34 @@ def _run_loop(*, sess: str, model: str, effort: str, question: str, history: lis
                 emit({"type": "code", "language": "python", "code": (f"# {title}\n" if title else "") + f"{fc.get('name')}({json.dumps(arguments, ensure_ascii=False)})"})
                 result = ahead.get(str(fc.get("call_id"))) if str(fc.get("call_id")) in ahead else biomni_tools.run_tool(str(fc.get("name")), arguments)
                 usage_stats.store().bump("func", str(fc.get("name")))
+            elif fc.get("name") == "propose_memory":
+                from biomni_ui import notes
+
+                emit({"type": "code", "language": "text", "code": (f"# {title}\n" if title else "") + "propose_memory (waits for the user's approval)"})
+                try:
+                    notes.propose(str(args.get("text") or ""), project_id)
+                    result = "Suggested to the user's memory. It is used only after they approve it in Settings."
+                except Exception as e:  # reported to the model like any failed step
+                    result = f"Could not save the suggestion ({type(e).__name__})."
+            elif fc.get("name") == "delegate_task":
+                if pool is None:  # sub-agents are not allowed in this run
+                    result = "Sub-agents are not available here; do this step yourself."
+                else:  # it starts now and runs beside this loop; its result arrives as a message
+                    result = pool.start(lambda fc=fc, args=args: run_delegate(fc, args), str(args.get("task") or ""), title)
+            elif fc.get("name") == "wait_subagents":
+                raw_ids = args.get("ids")
+                ids = [str(x).strip() for x in raw_ids if str(x).strip()] if isinstance(raw_ids, list) and raw_ids else None
+                emit({"type": "code", "language": "text", "code": (f"# {title}\n" if title else "") + f"wait_subagents({ids or 'all'})"})
+                found = pool.wait(ids, cancel) if pool is not None else []
+                result = (results_message(found)["content"][0]["text"] if found else "No sub-agent has finished that you asked for, or none is running.")
+            elif fc.get("name") == "look_at_image":
+                path = str(args.get("path") or "")
+                question = str(args.get("question") or "")
+                emit({"type": "code", "language": "text", "code": (f"# {title}\n" if title else "") + f"look_at_image({path!r})"})
+                try:
+                    result = image_call(path, question) if image_call is not None else "No image model is set in Settings."
+                except Exception as e:  # reported to the model like any failed step
+                    result = f"Could not look at the picture: {str(e)[:300]}"
             elif fc.get("name") == "find_skills":
                 query = str(args.get("query") or "")
                 emit({"type": "code", "language": "text", "code": f"# {title}" + chr(10) + f"find_skills({query!r})"})
@@ -1146,7 +1508,8 @@ def _run_loop(*, sess: str, model: str, effort: str, question: str, history: lis
             if before is not None:
                 made = changed_files(before, snapshot(cwd))
                 workdir.add_step(cwd, "bash" if fc.get("name") == "bash" else "python", title, str(args.get("command") or args.get("code") or ""), result)
-            emit({"type": "observation", "text": result, "files": made, "elapsed": round(time.time() - t0, 2)})
+            receipt = _receipt(cwd, fc, args, result, t0, made)
+            emit({"type": "observation", "text": result, "files": made, "elapsed": round(time.time() - t0, 2), **({"receipt": receipt} if receipt else {})})
             items.append({"type": "function_call_output", "call_id": fc.get("call_id"), "output": result})
         order = {str(c.get("call_id")): n for n, c in enumerate(calls)}
         items[first_out:] = sorted(items[first_out:], key=lambda i: order.get(str(i.get("call_id")), 0))  # the model gets the results in the order it asked

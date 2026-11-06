@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Project } from "@/lib/api";
+import { getProjectSummary, type Project } from "@/lib/api";
 import { tr, useI18n } from "@/lib/i18n";
 
 export const ALL = "all";
@@ -21,7 +21,7 @@ export function ProjectSwitcher({
   onSelect: (id: string) => void;
   onCreate: (name: string) => Promise<string | null>;
   onRename: (id: string, name: string) => Promise<string | null>;
-  onDelete: (id: string) => Promise<string | null>;
+  onDelete: (id: string, mode?: "keep" | "cascade") => Promise<string | null>;
   disabled?: boolean;
 }) {
   const { t } = useI18n();
@@ -77,8 +77,16 @@ export function ProjectSwitcher({
             onClick={async () => {
               const name = window.prompt(tr("Project name (leave empty and confirm = no change)"), cur.name);
               if (name && name.trim() && name.trim() !== cur.name) fail(await onRename(cur.id, name.trim()));
-              else if (name === "" && window.confirm(tr("Delete project “{name}”? Its tasks are kept and moved back to “Quick task”.", { name: cur.name })))
-                fail(await onDelete(cur.id));
+              else if (name === "") {
+                // Preview first: what is in the project, then either keep the sessions (moved to Quick task) or delete everything.
+                const s = await getProjectSummary(cur.id).catch(() => null);
+                const counts = { name: cur.name, sessions: s?.sessions ?? 0, tasks: s?.tasks ?? 0, published: s?.published ?? 0, notes: s?.notes ?? 0 };
+                if (window.confirm(tr("Delete project “{name}”? Its {sessions} sessions are kept and moved back to “Quick task”. (Cancel to keep the project; to delete everything, you will be asked next.)", counts))) {
+                  fail(await onDelete(cur.id, "keep"));
+                } else if (window.prompt(tr("To delete the project AND its {sessions} sessions, {tasks} tasks, {published} published pages and {notes} notes for good, type DELETE. Anything else keeps everything.", counts)) === "DELETE") {
+                  fail(await onDelete(cur.id, "cascade"));
+                }
+              }
             }}
             className="rounded-md px-1.5 py-1 text-soft hover:bg-card hover:text-accent"
           >

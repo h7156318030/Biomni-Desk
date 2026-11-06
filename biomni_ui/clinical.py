@@ -118,7 +118,7 @@ ALIAS_SYSTEM = (
     "Output only JSON: {\"kind\":\"company|drug|gene|disease|combo|other\",\"what\":\"one sentence on what it is\",\"aliases\":[\"at most 8 search terms\"]}\n"
     "Rules:\n"
     "- Generic drug names, disease names, gene symbols and technical terms: translate them into standard English with your own medical knowledge (for example 帕博利珠单抗 -> pembrolizumab; 肝癌 -> hepatocellular carcinoma).\n"
-    "- English names and former names of a company: use those that appear in the search results first. A name you genuinely know (for example 示例生物 = Example Bio) may also be written. They are only search terms; the answer comes only from the registration records.\n"
+    "- English names and former names of a company: use those that appear in the search results first. A name you genuinely know (for example 君赛生物 = Juncell Therapeutics) may also be written. They are only search terms; the answer comes only from the registration records.\n"
     "- Codes of products in development (for example BD111, GC101): write only those that really appear in the search results. Do not invent them from memory.\n"
     "- If the name is a combination such as \"drug + disease\", give one Essie expression in addition to each English name, for example: pembrolizumab AND hepatocellular carcinoma.\n"
     "- If you are not sure, write less rather than padding the list."

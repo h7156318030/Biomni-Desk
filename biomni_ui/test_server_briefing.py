@@ -20,7 +20,10 @@ class BriefingReachesTheAgent(unittest.TestCase):
         self.addCleanup(self.store.close)
         self.calls: list[tuple[str, str | None, str]] = []
 
-        def fake_start(prompt, conversation_id=None, extra="", mode="ask"):
+        self.started: dict = {}
+
+        def fake_start(prompt, conversation_id=None, extra="", mode="ask", agent=None, tools_off=None):
+            self.started = {"mode": mode, "agent": agent, "tools_off": set(tools_off or ())}
             self.calls.append((prompt, conversation_id, extra))
             self.store.create_task("t1", conversation_id or "c-new", prompt)
             return SimpleNamespace(id="t1", conversation_id=conversation_id or "c-new")
@@ -48,6 +51,34 @@ class BriefingReachesTheAgent(unittest.TestCase):
     def test_empty_settings_add_nothing(self):
         self.client.post("/api/tasks", json={"prompt": "hi"})
         self.assertEqual(self.calls[0][2], "")
+
+    def test_an_agent_profile_sets_mode_tools_and_its_own_profile(self):
+        with tempfile.TemporaryDirectory() as d:
+            saved = srv.agent_store
+            srv.agent_store = srv.agents.AgentStore(Path(d) / "agents.json")
+            self.addCleanup(setattr, srv, "agent_store", saved)
+            p = srv.agent_store.create({"name": "x", "model_id": None, "effort": None, "mode": "auto", "tools_off": ["web_search"], "skills": [], "instructions": "BRIEF"})
+            r = self.client.post("/api/tasks", json={"prompt": "hi", "agent_id": p["id"], "mode": "plan"})
+            self.assertEqual(r.status_code, 200)
+            self.assertEqual(self.started["mode"], "auto")  # the profile's mode wins over the request's
+            self.assertEqual(self.started["tools_off"], {"web_search"})
+            self.assertEqual(self.started["agent"]["instructions"], "BRIEF")
+
+    def test_an_unknown_agent_profile_is_refused(self):
+        r = self.client.post("/api/tasks", json={"prompt": "hi", "agent_id": "no-such-profile"})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(self.calls, [])
+
+    def test_project_files_are_listed_for_the_agent(self):
+        from unittest import mock
+
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "cohort.csv").write_text("id,value\n1,2\n", encoding="utf-8")
+            self.store.set_project_settings("quick", {"context": "", "instructions": [], "skills": [], "files": ["cohort.csv"], "tools_off": []})
+            with mock.patch.object(srv, "_upload_dir", lambda: Path(d)):
+                r = self.client.post("/api/tasks", json={"prompt": "hi"})
+            self.assertEqual(r.status_code, 200)
+            self.assertIn(str(Path(d) / "cohort.csv"), self.calls[0][2])
 
     def test_new_conversation_goes_into_the_chosen_project(self):
         proj = self.store.create_project("免疫项目")

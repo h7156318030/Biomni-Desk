@@ -53,3 +53,12 @@ workspace/
 # LLM Agent metadata
 .claude/
 .cursor/
+
+# Runtime records, memory and uploads of a running copy (never published)
+ui_data/*
+!ui_data/.gitkeep
+/execution_trace/
+/skills/
+/uploads/
+*.log
+*.db

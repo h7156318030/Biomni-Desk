@@ -24,7 +24,7 @@ class FakeLLM:
 
 class Routing(unittest.TestCase):
     def test_plain_trial_questions_are_taken(self):
-        for q in ["示例生物的临床试验", "查询示例生物的临床研究", "beta thalassemia gene therapy clinical trials", "NCT04211480", "CAR-T 淋巴瘤临床试验有哪些"]:
+        for q in ["示例生物的临床试验", "查询君赛生物的临床研究", "beta thalassemia gene therapy clinical trials", "NCT04211480", "CAR-T 淋巴瘤临床试验有哪些"]:
             self.assertTrue(clinical.wants_clinical(q), q)
 
     def test_analysis_papers_and_chat_are_not(self):
@@ -33,7 +33,7 @@ class Routing(unittest.TestCase):
 
     def test_subject_is_the_name_without_filler(self):
         self.assertEqual(clinical.subject_of("示例生物的临床试验"), "示例生物")
-        self.assertEqual(clinical.subject_of("查询示例生物的临床研究"), "示例生物")
+        self.assertEqual(clinical.subject_of("查询君赛生物的临床研究"), "君赛生物")
         self.assertEqual(clinical.subject_of("CAR-T 淋巴瘤临床试验有哪些"), "CAR-T 淋巴瘤")
 
 
@@ -162,14 +162,14 @@ class Specificity(unittest.TestCase):
 
         def fake(params):
             seen.append(params.get("query.term"))
-            return [study("NCTJ", "TIL", sponsor="Example Bio")] if params.get("query.term") == "Example Bio" else []
+            return [study("NCTJ", "TIL", sponsor="Shanghai Juncell Therapeutics")] if params.get("query.term") == "Juncell Therapeutics" else []
 
-        llm = FakeLLM('{"kind":"company","what":"TIL 公司","aliases":["Example Bio"]}')
+        llm = FakeLLM('{"kind":"company","what":"TIL 公司","aliases":["Juncell Therapeutics"]}')
         with mock.patch.object(clinical, "_search", side_effect=fake), mock.patch.object(clinical.web, "web_search", return_value="x"):
-            data = clinical.gather("示例生物的临床研究", llm)
-        self.assertIn("Example Bio", seen)
+            data = clinical.gather("君赛生物的临床研究", llm)
+        self.assertIn("Juncell Therapeutics", seen)
         self.assertEqual(data["total"], 1)
 
     def test_prompt_allows_translating_standard_terms(self):
         self.assertIn("pembrolizumab", clinical.ALIAS_SYSTEM)
-        self.assertIn("Example Bio", clinical.ALIAS_SYSTEM)
+        self.assertIn("Juncell", clinical.ALIAS_SYSTEM)

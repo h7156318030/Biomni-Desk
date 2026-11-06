@@ -61,11 +61,13 @@ export function ResultsPanel({
   artifacts,
   onOpen,
   onViewSource,
+  onDetails,
   onRefresh,
 }: {
   artifacts: Artifact[];
   onOpen?: (a: Artifact) => void;
   onViewSource?: (a: Artifact) => void;
+  onDetails?: (a: Artifact) => void;
   onRefresh?: () => void;
 }) {
   const { t } = useI18n();
@@ -229,6 +231,17 @@ export function ResultsPanel({
                   >
                     {e.file.name}
                   </a>
+                  {onDetails && (
+                    <button
+                      type="button"
+                      onClick={() => onDetails(e.file)}
+                      title={t("Versions, provenance and comments")}
+                      aria-label={t("Open details of {name}", { name: e.file.name })}
+                      className="shrink-0 text-xs text-soft hover:text-accent"
+                    >
+                      {t("Details")}
+                    </button>
+                  )}
                   {onViewSource && (
                     <button
                       type="button"

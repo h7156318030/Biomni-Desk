@@ -176,9 +176,9 @@ class Preamble(unittest.TestCase):
 
 class PreambleSplit(unittest.TestCase):
     def test_the_announcement_is_split_off_even_without_a_line_break(self):
-        pre, rest = na.split_preamble("我先核对“示例生物”对应的公司主体，再查它的业务与公开登记信息，避免同名误认。**“示例生物”指上海示例生物股份有限公司**，是一家专注细胞疗法的公司。")
+        pre, rest = na.split_preamble("我先核对“君赛生物”对应的公司主体，再查它的业务与公开登记信息，避免同名误认。**“君赛生物”指上海君赛生物股份有限公司**，是一家专注细胞疗法的公司。")
         self.assertTrue(pre.startswith("我先核对") and pre.endswith("误认。"))
-        self.assertTrue(rest.startswith("**“示例生物”指"))
+        self.assertTrue(rest.startswith("**“君赛生物”指"))
         self.assertEqual(na.split_preamble("TP53 位于 17 号染色体。"), ("", "TP53 位于 17 号染色体。"))
         self.assertEqual(na.split_preamble("我会先说结论：A 是对的。"), ("", "我会先说结论：A 是对的。"))  # nothing left after it
 

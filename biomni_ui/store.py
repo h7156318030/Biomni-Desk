@@ -33,6 +33,32 @@ CREATE TABLE IF NOT EXISTS published (
 );
 """
 
+def _text_around(body: str, q: str) -> str:
+    """A short piece of the readable text in a stored event that contains the query (the JSON keys and numbers are skipped)."""
+    try:
+        data: Any = json.loads(body)
+    except ValueError:
+        data = body
+    strings: list[str] = []
+
+    def walk(x: Any) -> None:
+        if isinstance(x, str):
+            strings.append(x)
+        elif isinstance(x, dict):
+            for v in x.values():
+                walk(v)
+        elif isinstance(x, list):
+            for v in x:
+                walk(v)
+
+    walk(data)
+    for text in strings:
+        at = text.lower().find(q.lower())
+        if at >= 0:
+            return text[max(0, at - 60): at + len(q) + 80]
+    return ""
+
+
 DEFAULT_PROJECT = "quick"
 DEFAULT_PROJECT_NAME = "Quick task"
 
@@ -170,6 +196,67 @@ class Store:
         self._run("DELETE FROM projects WHERE id=?", (project_id,))
         return True
 
+    def _in_list(self, ids: list[str]) -> tuple[str, tuple]:
+        return ",".join("?" for _ in ids), tuple(ids)
+
+    def project_summary(self, project_id: str) -> dict[str, Any]:
+        """What deleting this project would remove: its sessions, their tasks and the published pages made from them."""
+        conv_ids = [r["id"] for r in self._run("SELECT id FROM conversations WHERE project_id=?", (project_id,))]
+        if not conv_ids:
+            return {"sessions": 0, "tasks": 0, "published": 0}
+        marks, args = self._in_list(conv_ids)
+        task_ids = [r["id"] for r in self._run(f"SELECT id FROM tasks WHERE conversation_id IN ({marks})", args)]
+        published = 0
+        if task_ids:
+            tmarks, targs = self._in_list(task_ids)
+            published = self._run(f"SELECT COUNT(*) AS n FROM published WHERE task_id IN ({tmarks})", targs)[0]["n"]
+        return {"sessions": len(conv_ids), "tasks": len(task_ids), "published": published}
+
+    def delete_project_cascade(self, project_id: str) -> list[str]:
+        """Delete a project with its sessions, their tasks and events, the published records made from them, and its settings.
+        Returns the deleted conversation ids so the caller can remove their working folders. The default project cannot be deleted."""
+        if project_id == DEFAULT_PROJECT or not self._run("SELECT 1 FROM projects WHERE id=?", (project_id,)):
+            return []
+        conv_ids = [r["id"] for r in self._run("SELECT id FROM conversations WHERE project_id=?", (project_id,))]
+        if conv_ids:
+            marks, args = self._in_list(conv_ids)
+            task_ids = [r["id"] for r in self._run(f"SELECT id FROM tasks WHERE conversation_id IN ({marks})", args)]
+            if task_ids:
+                tmarks, targs = self._in_list(task_ids)
+                self._run(f"DELETE FROM events WHERE task_id IN ({tmarks})", targs)
+                self._run(f"DELETE FROM published WHERE task_id IN ({tmarks})", targs)
+                self._run(f"DELETE FROM tasks WHERE id IN ({tmarks})", targs)
+            self._run(f"DELETE FROM conversations WHERE id IN ({marks})", args)
+        self._run("DELETE FROM project_settings WHERE project_id=?", (project_id,))
+        self._run("DELETE FROM projects WHERE id=?", (project_id,))
+        return conv_ids
+
+    def search(self, query: str, project_id: str | None = None, limit: int = 40) -> list[dict[str, Any]]:
+        """Sessions whose title, question or any step text contains the query (case-insensitive for ASCII), newest first."""
+        q = " ".join(str(query or "").split())
+        if not q:
+            return []
+        esc = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        like = f"%{esc}%"
+        rows = self._run(
+            "SELECT c.id, c.title, c.updated, c.project_id, "
+            "(SELECT t.prompt FROM tasks t WHERE t.conversation_id=c.id AND t.prompt LIKE ? ESCAPE '\\' ORDER BY t.created LIMIT 1) AS prompt_hit, "
+            "(SELECT e.body FROM events e JOIN tasks t ON t.id=e.task_id WHERE t.conversation_id=c.id AND e.body LIKE ? ESCAPE '\\' LIMIT 1) AS event_hit "
+            "FROM conversations c "
+            "WHERE (? IS NULL OR c.project_id=?) AND (c.title LIKE ? ESCAPE '\\' "
+            "OR EXISTS (SELECT 1 FROM tasks t WHERE t.conversation_id=c.id AND t.prompt LIKE ? ESCAPE '\\') "
+            "OR EXISTS (SELECT 1 FROM events e JOIN tasks t ON t.id=e.task_id WHERE t.conversation_id=c.id AND e.body LIKE ? ESCAPE '\\')) "
+            "ORDER BY c.updated DESC LIMIT ?",
+            (like, like, project_id, project_id, like, like, like, limit),
+        )
+        out = []
+        for r in rows:
+            snippet = str(r["prompt_hit"] or "")
+            if not snippet and r["event_hit"]:
+                snippet = _text_around(str(r["event_hit"]), q)
+            out.append({"id": r["id"], "title": r["title"], "updated": r["updated"], "project_id": r["project_id"] or DEFAULT_PROJECT, "snippet": snippet.replace("\\n", " ")})
+        return out
+
     def set_project(self, conversation_id: str, project_id: str) -> bool:
         if project_id != DEFAULT_PROJECT and not self._run("SELECT 1 FROM projects WHERE id=?", (project_id,)):
             return False
@@ -244,7 +331,40 @@ class Store:
             data = json.loads(rows[0]["body"]) if rows else {}
         except ValueError:
             data = {}
-        return {"context": str(data.get("context") or ""), "instructions": list(data.get("instructions") or []), "skills": list(data.get("skills") or [])}
+        return {
+            "context": str(data.get("context") or ""),
+            "instructions": list(data.get("instructions") or []),
+            "skills": list(data.get("skills") or []),
+            "files": list(data.get("files") or []),
+            "tools_off": list(data.get("tools_off") or []),
+            "memory_on": bool(data.get("memory_on", True)),
+        }
+
+    def generated_files(self, project_id: str, limit: int = 80) -> list[dict[str, Any]]:
+        """The result files the project's sessions produced, newest first, one entry per file path."""
+        rows = self._run(
+            "SELECT e.body, t.conversation_id, c.title, t.created FROM events e "
+            "JOIN tasks t ON t.id = e.task_id JOIN conversations c ON c.id = t.conversation_id "
+            "WHERE c.project_id=? AND e.body LIKE '%\"artifacts\": [{%' ORDER BY t.created DESC, e.seq DESC LIMIT 400",
+            (project_id,),
+        )
+        seen: set[str] = set()
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            try:
+                data = json.loads(r["body"])
+            except ValueError:
+                continue
+            for a in data.get("artifacts") or []:
+                path = str(a.get("path") or "")
+                if not path or path in seen:
+                    continue
+                seen.add(path)
+                out.append({"name": a.get("name") or path, "path": path, "kind": a.get("kind"), "size": a.get("size"),
+                            "session_id": r["conversation_id"], "session_title": r["title"], "time": r["created"]})
+                if len(out) >= limit:
+                    return out
+        return out
 
     def set_project_settings(self, project_id: str, value: dict[str, Any]) -> bool:
         if project_id != DEFAULT_PROJECT and not self._run("SELECT 1 FROM projects WHERE id=?", (project_id,)):

@@ -62,7 +62,7 @@ class Running(unittest.TestCase):
 class LoopTools(unittest.TestCase):
     def test_the_loop_has_search_shell_and_the_function_finder_by_default(self):
         names = [t.get("type") if t.get("type") == "web_search" else t.get("name") for t in na.active_tools()]
-        self.assertEqual(sorted(names, key=str), sorted(["web_search", "bash", "python", "todo", "find_tools", "run_tool", "use_skill", "find_skills", "ask_user"], key=str))  # the Biomni functions are found and called, not guessed
+        self.assertEqual(sorted(names, key=str), sorted(["web_search", "bash", "python", "todo", "find_tools", "run_tool", "use_skill", "find_skills", "ask_user", "delegate_task", "propose_memory"], key=str))  # the Biomni functions are found and called, not guessed
         self.assertIn("biomni.tool", na.system_prompt("curl", ""))
 
     def test_the_biomni_style_tells_the_model_to_find_functions_first(self):

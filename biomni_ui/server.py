@@ -23,6 +23,7 @@ import os
 import shutil
 import subprocess
 import threading
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -55,6 +56,7 @@ from biomni_ui.refs import RefResolver  # noqa: E402
 from biomni_ui import settings as ui_settings  # noqa: E402
 from biomni_ui.runner import Busy, Manager  # noqa: E402
 from biomni_ui.skills import FIELDS, SkillStore  # noqa: E402
+from biomni_ui import schedules, skill_import, agents, workdir  # noqa: E402
 from biomni_ui.store import Store  # noqa: E402
 
 HOST = os.getenv("BIOMNI_API_HOST", "127.0.0.1")
@@ -66,6 +68,9 @@ WEB_ORIGIN_REGEX = r"^http://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$"
 SETTINGS_FILE = ROOT / "ui_data" / "settings.json"
 store = Store(ROOT / "ui_data" / "biomni_ui.db")
 skills = SkillStore(ROOT / "skills", ROOT / "ui_data" / "skills_state.json")
+schedule_store = schedules.ScheduleStore(ROOT / "ui_data" / "schedules.json")
+schedule_stop = threading.Event()
+agent_store = agents.AgentStore(ROOT / "ui_data" / "agents.json")
 
 
 def _make_agent():
@@ -89,6 +94,54 @@ def _make_agent():
 
 manager = Manager(_make_agent, store)
 manager.skill_store = skills
+manager.llm_for_profile = lambda profile: _build_llm(entry=models.get(profile["model_id"]) if profile.get("model_id") else None, effort=profile.get("effort"), search=True)  # an agent profile's own model and effort
+def _role_entry(key: str) -> dict | None:
+    """The saved model chosen for one role in Settings (None: the main model)."""
+    rid = ui_settings.load(SETTINGS_FILE).get(key)
+    return models.get(rid) if rid else None
+
+
+def _subagent_llm():
+    """The model and reasoning level the sub-agents run on: the model Settings chooses (or the main model), at the sub-agent level
+    (medium unless Settings sets another; sub-tasks are shorter, so a lower level keeps them quick)."""
+    eff = ui_settings.load(SETTINGS_FILE).get("subagent_effort") or "medium"
+    entry = _role_entry("subagent_model_id")
+    return _build_llm(entry=entry, effort=eff, search=True)
+
+
+def _planner_llm():
+    """The model that drafts plans, when Settings chooses one (or a level for it); otherwise the main model."""
+    eff = ui_settings.load(SETTINGS_FILE).get("planner_effort")
+    entry = _role_entry("planner_model_id")
+    if entry is None and not eff:
+        return _llm()
+    return _build_llm(entry=entry, effort=eff, search=False)
+
+
+def _image_target():
+    """(base URL, key, model) of the image model when Settings sets one. ChatGPT models are not used for pictures here."""
+    entry = _role_entry("image_model_id")
+    if not entry or entry.get("source") == "Codex":
+        return None
+    creds = providers.credentials(entry["provider"])
+    if creds is None:
+        return None
+    base, key = creds
+    return base, key, entry["model"]
+
+
+def _role_settings() -> dict:
+    """Settings the agent loop reads on each task: the sub-agent level, how many sub-agents run at once, and the memory switches.
+    Defaults apply when a value is unset."""
+    s = ui_settings.load(SETTINGS_FILE)
+    out = {"subagent_effort": s.get("subagent_effort") or None}
+    out.update({k: s.get(k, v) for k, v in ui_settings.DEFAULTS.items()})
+    return out
+
+
+manager.subagent_llm = _subagent_llm
+manager.image_target = _image_target
+manager.role_settings = _role_settings
 manager.write_llm_factory = lambda: _build_llm(effort="medium" if _effort() in ("high", "xhigh") else _effort()) if (_active_entry() or {}).get("source") == "Codex" else None
 manager.fast_llm_factory = lambda: _build_llm(effort="medium") if (_active_entry() or {}).get("source") == "Codex" else None
 providers = ui_providers.ProviderStore(
@@ -208,7 +261,9 @@ async def lifespan(_app):
     workers = int(os.getenv("BIOMNI_UI_WORKERS", "3") or 0)
     if workers > 0 and not os.environ.get("BIOMNI_UI_WORKER"):
         manager.start_workers(workers, ROOT)
+    threading.Thread(target=schedules.loop, args=(schedule_store, _start_scheduled, lambda: manager.agent_ready, schedule_stop), daemon=True, name="scheduler").start()
     yield
+    schedule_stop.set()
     manager.stop_workers()
 
 
@@ -223,6 +278,7 @@ class NewTask(BaseModel):
     mentions: list[dict[str, str]] = Field(default_factory=list, max_length=10)
     project_id: str | None = Field(default=None, max_length=40)  # where a brand-new conversation belongs
     mode: str = Field(default="ask", pattern="^(plan|ask|auto)$")  # plan: approve the plan, then run; ask: run and ask when unsure; auto: run, no questions
+    agent_id: str | None = Field(default=None, max_length=60)  # an agent profile; its mode, model, effort and tools apply to this task
 
 
 class PlanRequest(BaseModel):
@@ -362,7 +418,41 @@ def _models_view() -> dict:
         "custom_ready": _custom_ready(),
         "efforts": effort_levels.offered(list(EFFORTS)),
         "providers": providers.list(),
+        "roles": _model_roles(),
     }
+
+
+def _model_roles() -> dict:
+    """Which model does each helper role (None means the main model), the reasoning level for the planner, sub-agents and reviewer,
+    how many sub-agents run at once, and the memory switches."""
+    saved = ui_settings.load(SETTINGS_FILE)
+    out: dict = {k: saved.get(k) or None for k in (*ui_settings.ROLE_KEYS, *ui_settings.ROLE_EFFORT_KEYS)}
+    out.update({k: saved.get(k, v) for k, v in ui_settings.DEFAULTS.items()})
+    return out
+
+
+class RolesIn(BaseModel):
+    """Only the fields sent are changed; a field sent as null clears a model or level back to the main model's."""
+    planner_model_id: str | None = Field(default=None, max_length=120)
+    subagent_model_id: str | None = Field(default=None, max_length=120)
+    reviewer_model_id: str | None = Field(default=None, max_length=120)
+    image_model_id: str | None = Field(default=None, max_length=120)
+    planner_effort: str | None = Field(default=None, max_length=20)
+    subagent_effort: str | None = Field(default=None, max_length=20)
+    reviewer_effort: str | None = Field(default=None, max_length=20)
+    subagent_max: int | None = None
+    memory_recall_chars: int | None = None
+    memory_auto: bool | None = None
+
+
+@app.put("/api/model-roles")
+def set_model_roles(body: RolesIn):
+    try:
+        changes = ui_settings.validate_roles(body.model_dump(exclude_unset=True), {m["id"] for m in models.list()}, set(effort_levels.ORDER))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    ui_settings.save(SETTINGS_FILE, ui_settings.load(SETTINGS_FILE), changes)
+    return _models_view()
 
 
 def _settings_view() -> dict:
@@ -801,6 +891,9 @@ def delete_skill(skill_id: str):
     if existing["source"] == "builtin":
         raise HTTPException(status_code=403, detail="Built-in skills cannot be deleted, only turned off.")
     skills.delete(skill_id)
+    from biomni_ui import github_skills
+
+    github_skills.forget(skill_id)  # a deleted skill has no source left to check for updates
     _resync_skills()
     return {"ok": True}
 
@@ -861,11 +954,185 @@ def rename_project(project_id: str, body: ProjectIn):
     return store.list_projects()
 
 
+@app.get("/api/projects/{project_id}/summary")
+def project_summary(project_id: str):
+    """What the project holds, for the project page and the delete confirmation."""
+    from biomni_ui import notes
+
+    if project_id != "quick" and not any(p["id"] == project_id for p in store.list_projects()):
+        raise HTTPException(status_code=404, detail="Project not found")
+    settings = store.get_project_settings(project_id)
+    counts = store.project_summary(project_id)
+    return {
+        **counts,
+        "notes": notes.count_for_project(project_id),
+        "files": len(settings.get("files", [])),
+        "skills": settings.get("skills", []),
+        "tools_off": settings.get("tools_off", []),
+        "memory_on": settings.get("memory_on", True),
+    }
+
+
 @app.delete("/api/projects/{project_id}")
-def delete_project(project_id: str):
-    if not store.delete_project(project_id):
+def delete_project(project_id: str, mode: str = "keep"):
+    """mode "keep" (the default) moves the project's sessions to the quick-task area; mode "cascade" deletes the sessions, their
+    tasks, published records, the project's notes and its working folders as well."""
+    import re as _re
+    from biomni_ui import notes
+
+    if mode not in ("keep", "cascade"):
+        raise HTTPException(status_code=400, detail="mode must be keep or cascade")
+    if mode == "keep":
+        if not store.delete_project(project_id):
+            raise HTTPException(status_code=404, detail="Project not found, or it is the default project (it cannot be deleted)")
+        return store.list_projects()
+    if project_id == "quick" or not any(p["id"] == project_id for p in store.list_projects()):
         raise HTTPException(status_code=404, detail="Project not found, or it is the default project (it cannot be deleted)")
+    conv_ids = store.delete_project_cascade(project_id)
+    notes.delete_project(project_id)
+    base = workdir.results_base()
+    for cid in conv_ids:
+        folder = base / _re.sub(r"[^A-Za-z0-9_-]", "_", cid or "")
+        if cid and folder.is_dir() and folder.parent == base:
+            shutil.rmtree(folder, ignore_errors=True)
     return store.list_projects()
+
+
+@app.get("/api/search")
+def search_sessions(q: str = "", project: str | None = None):
+    return {"results": store.search(q, project)}
+
+
+# ---- versions, provenance and comments on result files ------------------------------------------
+
+def _session_folder(cid: str) -> Path:
+    if not cid or store.get_conversation(cid) is None:
+        raise HTTPException(status_code=404, detail="No such session")
+    return workdir.conversation_dir(cid)
+
+
+def _in_session(folder: Path, path: str) -> str:
+    """A result file's path as the version index keeps it: relative to the session folder (an absolute path inside it is accepted)."""
+    p = Path(path)
+    if not p.is_absolute():
+        return p.as_posix()
+    try:
+        return p.resolve().relative_to(folder.resolve()).as_posix()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="That file is not part of this session") from e
+
+
+@app.get("/api/conversations/{cid}/files")
+def versioned_files(cid: str):
+    from biomni_ui import versions
+
+    return {"files": list(versions.all_files(_session_folder(cid)).values())}
+
+
+@app.get("/api/conversations/{cid}/versions")
+def file_versions(cid: str, path: str):
+    from biomni_ui import versions
+
+    folder = _session_folder(cid)
+    return {"versions": versions.versions_of(folder, _in_session(folder, path))}
+
+
+@app.get("/api/conversations/{cid}/version-file")
+def version_file(cid: str, sha: str, name: str = "file", download: bool = False):
+    from biomni_ui import versions
+
+    blob = versions.blob_path(_session_folder(cid), sha)
+    if blob is None:
+        raise HTTPException(status_code=404, detail="No such version")
+    return FileResponse(blob, filename=name if download else None)
+
+
+class RestoreVersionIn(BaseModel):
+    path: str = Field(min_length=1, max_length=500)
+    version: int = Field(ge=1)
+
+
+@app.post("/api/conversations/{cid}/versions/restore")
+def restore_version(cid: str, body: RestoreVersionIn):
+    from biomni_ui import versions
+
+    folder = _session_folder(cid)
+    rel = _in_session(folder, body.path)
+    try:
+        version = versions.restore(folder, rel, body.version)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail="No such version") from e
+    return {"version": version, "versions": versions.versions_of(folder, rel)}
+
+
+@app.get("/api/conversations/{cid}/provenance")
+def file_provenance(cid: str, path: str, version: int):
+    """How one version was made: the question and answer, code steps, tool-call log, environment and review of the task that wrote it."""
+    from biomni_ui import versions
+
+    folder = _session_folder(cid)
+    path = _in_session(folder, path)
+    rows = versions.versions_of(folder, path)
+    found = next((v for v in rows if v["version"] == version), None)
+    if found is None:
+        raise HTTPException(status_code=404, detail="No such version")
+    conv = store.get_conversation(cid) or {}
+    task = next((t for t in conv.get("tasks", []) if t["id"] == found.get("task_id")), None)
+    events = (task or {}).get("events", []) or []
+    stamps = [float(e.get("ts") or 0) for e in events if e.get("ts")]
+    receipts_all: list[dict] = []
+    if stamps:
+        lo, hi = min(stamps) - 2, max(stamps) + 2
+        for r in receipts_mod_read(folder):
+            try:
+                at = time.mktime(time.strptime(str(r.get("time")), "%Y-%m-%d %H:%M:%S"))
+            except (ValueError, TypeError):
+                continue
+            if lo <= at <= hi:
+                receipts_all.append(r)
+    try:
+        return versions.provenance(folder, path, version, task, events, receipts_all)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail="No such version") from e
+
+
+def receipts_mod_read(folder: Path) -> list[dict]:
+    from biomni_ui import receipts
+
+    return receipts.read_all(folder)
+
+
+class AnnotationIn(BaseModel):
+    path: str = Field(min_length=1, max_length=500)
+    text: str = Field(min_length=1, max_length=1000)
+    quote: str = Field(default="", max_length=500)
+
+
+@app.get("/api/conversations/{cid}/annotations")
+def list_annotations(cid: str):
+    from biomni_ui import annotations
+
+    return {"items": annotations.list_items(_session_folder(cid))}
+
+
+@app.post("/api/conversations/{cid}/annotations")
+def add_annotation(cid: str, body: AnnotationIn):
+    from biomni_ui import annotations
+
+    try:
+        annotations.add(_session_folder(cid), body.path, body.text, body.quote)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return {"items": annotations.list_items(_session_folder(cid))}
+
+
+@app.delete("/api/conversations/{cid}/annotations/{item_id}")
+def delete_annotation(cid: str, item_id: str):
+    from biomni_ui import annotations
+
+    if not annotations.delete(_session_folder(cid), item_id):
+        raise HTTPException(status_code=404, detail="No such comment")
+    return {"items": annotations.list_items(_session_folder(cid))}
 
 
 class NotesIn(BaseModel):
@@ -974,10 +1241,39 @@ def put_connector(group_id: str, body: ConnectorIn):
 
 
 @app.get("/api/memory-notes")
-def get_memory_notes():
+def get_memory_notes(q: str = Query(default="", max_length=200), status: str = Query(default="", max_length=20)):
+    """All notes, newest first; with q or status, only the matching ones."""
     from biomni_ui import notes
 
-    return {"items": notes.list_items()}
+    if status and status not in (notes.APPROVED, notes.PROPOSED):
+        raise HTTPException(status_code=400, detail="status must be approved or proposed")
+    return {"items": notes.search(q, status or None)}
+
+
+class MemoryNotePatch(BaseModel):
+    text: str | None = Field(default=None, max_length=300)
+    category: str | None = Field(default=None, max_length=40)
+    project_id: str | None = Field(default=None, max_length=40)  # send null to make it apply to every project
+
+
+@app.patch("/api/memory-notes/{item_id}")
+def edit_memory_note(item_id: str, body: MemoryNotePatch):
+    from biomni_ui import notes
+
+    project_id = notes._UNSET
+    if "project_id" in body.model_fields_set:
+        project_id = body.project_id or None
+        if project_id == "quick":
+            project_id = None
+        if project_id is not None and not any(p["id"] == project_id for p in store.list_projects()):
+            raise HTTPException(status_code=400, detail="No such project")
+    try:
+        item = notes.update(item_id, text=body.text, category=body.category, project_id=project_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    if item is None:
+        raise HTTPException(status_code=404, detail="No such remembered item")
+    return {"item": item, "items": notes.list_items()}
 
 
 @app.delete("/api/memory-notes/{item_id}")
@@ -989,10 +1285,72 @@ def delete_memory_note(item_id: str):
     return {"items": notes.list_items()}
 
 
+class MemoryNoteIn(BaseModel):
+    text: str = Field(min_length=1, max_length=300)
+    project_id: str | None = Field(default=None, max_length=40)  # None: every project
+    category: str = Field(default="General", max_length=40)
+
+
+@app.post("/api/memory-notes")
+def add_memory_note(body: MemoryNoteIn):
+    from biomni_ui import notes
+
+    project_id = body.project_id or None
+    if project_id == "quick":  # the quick-task area is not a project: its notes apply to every project
+        project_id = None
+    if project_id is not None and not any(p["id"] == project_id for p in store.list_projects()):
+        raise HTTPException(status_code=400, detail="No such project")
+    notes.add(body.text.strip(), project_id, category=body.category)
+    return {"items": notes.list_items()}
+
+
+@app.delete("/api/projects/{project_id}/memory")
+def clear_project_memory(project_id: str):
+    """Forget everything remembered for one project (notes for all projects are kept)."""
+    from biomni_ui import notes
+
+    return {"removed": notes.delete_project(project_id), "items": notes.list_items()}
+
+
+@app.get("/api/projects/{project_id}/generated")
+def project_generated_files(project_id: str):
+    if project_id != "quick" and not any(p["id"] == project_id for p in store.list_projects()):
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"files": store.generated_files(project_id)}
+
+
+@app.post("/api/memory-notes/{item_id}/approve")
+def approve_memory_note(item_id: str):
+    from biomni_ui import notes
+
+    if not notes.approve(item_id):
+        raise HTTPException(status_code=404, detail="No such remembered item")
+    return {"items": notes.list_items()}
+
+
+@app.get("/api/work-log")
+def get_work_log(project_id: str = Query(default="", max_length=40), limit: int = Query(default=50, ge=1, le=200)):
+    """What the tasks of a project (or of all projects) did, newest first: the project's own record of its work."""
+    from biomni_ui import worklog
+
+    return {"items": worklog.list_items(project_id or None, limit)}
+
+
+@app.delete("/api/work-log")
+def clear_work_log(project_id: str = Query(default="", max_length=40)):
+    """Forget the work log of one project, or of all projects when no project is given."""
+    from biomni_ui import worklog
+
+    return {"removed": worklog.delete(project_id or None)}
+
+
 class ProjectSettingsIn(BaseModel):
     context: str = Field(default="", max_length=ui_prefs.MAX_CONTEXT_CHARS)
     instructions: list[str] = Field(default_factory=list, max_length=ui_prefs.MAX_INSTRUCTIONS)
     skills: list[str] = Field(default_factory=list, max_length=20)
+    files: list[str] = Field(default_factory=list, max_length=20)  # upload names
+    tools_off: list[str] = Field(default_factory=list, max_length=10)  # optional tools switched off for every task in the project
+    memory_on: bool = True  # off: nothing remembered is used in the project's tasks
 
 
 @app.get("/api/projects/{project_id}/settings")
@@ -1007,6 +1365,8 @@ def put_project_settings(project_id: str, body: ProjectSettingsIn):
     value = ui_prefs.clean_project_settings(body.model_dump())
     known = {s["id"] for s in skills.list()}
     value["skills"] = [x for x in value["skills"] if x in known]
+    uploaded = {p.name for p in _upload_dir().iterdir() if p.is_file()} if _upload_dir().exists() else set()
+    value["files"] = [x for x in value["files"] if x in uploaded]  # only files that are really uploaded
     if not store.set_project_settings(project_id, value):
         raise HTTPException(status_code=404, detail="Project not found")
     return value
@@ -1166,20 +1526,384 @@ def resources():
     return {"ready": True, "tools": tools, "data": data, "libraries": libs, "tool_summary": summary}
 
 
+# ---- scheduled tasks and skill import ------------------------------------------------------------
+
+class ScheduleIn(BaseModel):
+    name: str = Field(default="", max_length=80)
+    prompt: str = Field(min_length=1, max_length=20000)
+    project_id: str | None = Field(default=None, max_length=40)
+    kind: str = Field(default="daily", pattern="^(every|daily)$")
+    minutes: int | None = None
+    time: str | None = Field(default=None, max_length=5)  # HH:MM, local time, for kind "daily"
+    enabled: bool = True
+
+
+class SkillImportIn(BaseModel):
+    url: str = Field(min_length=8, max_length=2000)
+
+
+class GitHubTokenIn(BaseModel):
+    token: str | None = Field(default=None, max_length=300)
+
+
+@app.get("/api/credentials/github")
+def github_token_state():
+    """Whether a GitHub token is stored. The value itself is never sent back to the page."""
+    from biomni_ui import github_skills
+
+    return {"set": github_skills.get_token() is not None}
+
+
+@app.put("/api/credentials/github")
+def set_github_token(body: GitHubTokenIn):
+    from biomni_ui import github_skills
+
+    return {"set": github_skills.set_token(body.token)}
+
+
+@app.get("/api/skill-updates")  # not under /api/skills/: that prefix is taken by /api/skills/{skill_id}
+def check_skill_updates():
+    """Imported GitHub skills that changed upstream. Asks GitHub; changes nothing until the user applies them."""
+    import httpx
+
+    from biomni_ui import github_skills
+
+    try:
+        rows = github_skills.check_updates(skills, token=github_skills.get_token())
+    except (ValueError, httpx.HTTPError) as e:
+        raise HTTPException(status_code=502, detail=str(e) or f"Could not reach GitHub ({type(e).__name__})") from e
+    return {"updates": rows}
+
+
+class SkillUpdateIn(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=50)
+
+
+@app.post("/api/skill-updates/apply")
+def apply_skill_updates(body: SkillUpdateIn):
+    import httpx
+
+    from biomni_ui import github_skills
+
+    try:
+        done = github_skills.apply_updates(skills, body.ids, token=github_skills.get_token())
+    except (ValueError, httpx.HTTPError) as e:
+        raise HTTPException(status_code=502, detail=str(e) or f"Could not reach GitHub ({type(e).__name__})") from e
+    _resync_skills()
+    return {"updated": done}
+
+
+def _start_scheduled(job: dict):
+    """Start one scheduled run in auto mode. Raises schedules.SkipRun while a task is running, so the job is retried later."""
+    try:
+        task = manager.start(job["prompt"], None, "", mode="auto")
+    except Busy as e:
+        raise schedules.SkipRun(str(e)) from e
+    project_id = job.get("project_id") or "quick"
+    if project_id != "quick" and any(p["id"] == project_id for p in store.list_projects()):
+        store.set_project(task.conversation_id, project_id)
+    return task
+
+
+def _schedule_spec(body: ScheduleIn) -> dict:
+    try:
+        return schedules.validate(body.kind, body.minutes, body.time)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@app.get("/api/schedules")
+def list_schedules():
+    return schedule_store.list()
+
+
+@app.post("/api/schedules")
+def create_schedule(body: ScheduleIn):
+    return schedule_store.create(body.name, body.prompt, body.project_id, _schedule_spec(body), body.enabled)
+
+
+@app.put("/api/schedules/{job_id}")
+def update_schedule(job_id: str, body: ScheduleIn):
+    job = schedule_store.update(job_id, body.name, body.prompt, body.project_id, _schedule_spec(body), body.enabled)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    return job
+
+
+@app.delete("/api/schedules/{job_id}")
+def delete_schedule(job_id: str):
+    if not schedule_store.delete(job_id):
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    return {"ok": True}
+
+
+@app.post("/api/schedules/{job_id}/run")
+def run_schedule_now(job_id: str):
+    job = schedule_store.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    try:
+        task = _start_scheduled(job)
+    except schedules.SkipRun as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    schedule_store.mark(job_id, last_status="started", last_run=time.time(), last_task_id=task.id, last_conversation_id=task.conversation_id)
+    return {"id": task.id, "conversation_id": task.conversation_id}
+
+
+@app.post("/api/skills/import")
+def import_skill(body: SkillImportIn):
+    import httpx
+
+    try:
+        from biomni_ui import github_skills
+
+        skill = skill_import.import_skill(skills, body.url, token=github_skills.get_token())
+    except FileExistsError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Could not download the file ({type(e).__name__})") from e
+    _resync_skills()
+    return skill
+
+
+# ---- community library (curated) ---------------------------------------------------------------
+
+@app.get("/api/community")
+def community_search(q: str = Query(default="", max_length=200), kind: str = Query(default="", max_length=20)):
+    """The curated community entries, filtered by words and kind (skills, tools, lists)."""
+    from biomni_ui import community
+
+    if kind and kind not in community.KINDS:
+        raise HTTPException(status_code=400, detail="kind must be skills, tools or lists")
+    cat = community.catalog()
+    return {"checked_on": cat.get("checked_on", ""), "note": cat.get("note", ""), "items": community.search(q, kind or None)}
+
+
+@app.get("/api/community/{entry_id}/skills")
+def community_skills(entry_id: str):
+    """The SKILL.md files in one skill collection, and which of them are already in the skill library."""
+    from biomni_ui import community, github_skills
+
+    e = community.entry(entry_id)
+    if e is None:
+        raise HTTPException(status_code=404, detail="No such library entry")
+    try:
+        files = community.skill_files(e, token=github_skills.get_token())
+    except ValueError as err:
+        raise HTTPException(status_code=502, detail=str(err)) from err
+    except httpx.HTTPError as err:
+        raise HTTPException(status_code=502, detail=f"Could not list the repository ({type(err).__name__})") from err
+    present = {s.get("id") for s in skills.list()}
+    return {"entry": e, "files": [{**f, "url": community.blob_url(e, f["path"])} for f in files], "present": sorted(present)}
+
+
+class CommunityInstallIn(BaseModel):
+    paths: list[str] = Field(default_factory=list, max_length=50)  # community.MAX_INSTALL
+
+
+@app.post("/api/community/{entry_id}/install")
+def community_install(entry_id: str, body: CommunityInstallIn):
+    """Add the chosen skills from a collection to the skill library. Each one is checked and saved like an import from a link."""
+    from biomni_ui import community, github_skills
+
+    e = community.entry(entry_id)
+    if e is None:
+        raise HTTPException(status_code=404, detail="No such library entry")
+    try:
+        results = community.install(e, body.paths, skills, github_skills.get_token(), skill_import.import_skill)
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
+    except httpx.HTTPError as err:
+        raise HTTPException(status_code=502, detail=f"Could not download the skills ({type(err).__name__})") from err
+    _resync_skills()
+    return {"results": results, "added": sum(1 for r in results if r["ok"])}
+
+
+# ---- community hub (search, scan, install) ------------------------------------------------------
+
+@app.get("/api/hub/search")
+def hub_search(q: str = Query(default="", max_length=200), kind: str = Query(default="", max_length=20), trust: str = Query(default="", max_length=20)):
+    """Skills (from the index), tools, databases and software (from the curated list) matching the words. Each skill says whether it is installed."""
+    from biomni_ui import community, hub
+
+    if kind and kind not in ("skills", "tools", "lists", "databases", "software"):
+        raise HTTPException(status_code=400, detail="kind must be skills, tools, lists, databases or software")
+    idx = hub.index()
+    have = hub.installed_urls()
+    items = hub.search(q, kind or None, trust or None)
+    for it in items:
+        if it.get("kind") == "skills":
+            it["installed"] = it.get("url") in have
+    return {"items": items, "count": len(items), "built_on": idx.get("built_on", ""), "indexed": idx.get("count", 0), "skipped": idx.get("skipped", 0),
+            "checked_on": community.catalog().get("checked_on", "")}
+
+
+@app.post("/api/hub/refresh")
+def hub_refresh():
+    """Rebuild the skills index from GitHub in the background. The page follows the progress with /api/hub/status."""
+    from biomni_ui import hub
+
+    return {"started": hub.start_refresh(), "status": hub.status()}
+
+
+@app.get("/api/hub/status")
+def hub_status():
+    from biomni_ui import hub
+
+    return hub.status()
+
+
+class HubUrlIn(BaseModel):
+    url: str = Field(min_length=10, max_length=400)
+    force: bool = False
+
+
+@app.post("/api/hub/inspect")
+def hub_inspect(body: HubUrlIn):
+    """Download a skill and scan it, to read the findings before deciding. Nothing is installed."""
+    import httpx
+
+    from biomni_ui import hub
+
+    try:
+        res = hub.inspect(body.url.strip())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Could not download the skill ({type(e).__name__})") from e
+    return res
+
+
+@app.post("/api/hub/install")
+def hub_install(body: HubUrlIn):
+    """Scan the skill and add it to the library when the install policy allows it. A caution verdict needs force (you confirm the findings);
+    a dangerous verdict is refused whatever you send. Every attempt is written to the audit log."""
+    import httpx
+
+    from biomni_ui import github_skills, hub
+
+    try:
+        result = hub.install(body.url.strip(), force=body.force, store=skills, fetch_text=None)
+    except PermissionError as e:
+        import json as _json
+
+        raise HTTPException(status_code=409, detail=_json.loads(str(e))) from e
+    except FileExistsError as e:
+        raise HTTPException(status_code=409, detail={"reason": str(e)}) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Could not download the skill ({type(e).__name__})") from e
+    _resync_skills()
+    return result
+
+
+# ---- agent profiles -----------------------------------------------------------------------------
+
+class AgentIn(BaseModel):
+    name: str = Field(default="", max_length=60)
+    model_id: str | None = Field(default=None, max_length=120)  # empty: the model in use in Settings
+    effort: str | None = Field(default=None, max_length=20)  # empty: the model's default
+    mode: str = Field(default="ask", max_length=10)
+    tools_off: list[str] = Field(default_factory=list, max_length=10)
+    skills: list[str] = Field(default_factory=list, max_length=20)
+    instructions: str = Field(default="", max_length=agents.MAX_INSTRUCTIONS)
+
+
+def _agent_fields(body: AgentIn) -> dict:
+    try:
+        return agents.clean(body.model_dump(), {m["id"] for m in models.list()}, EFFORTS)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@app.get("/api/agents")
+def list_agents():
+    return agent_store.list()
+
+
+@app.post("/api/agents")
+def create_agent(body: AgentIn):
+    try:
+        return agent_store.create(_agent_fields(body))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@app.put("/api/agents/{profile_id}")
+def update_agent(profile_id: str, body: AgentIn):
+    updated = agent_store.update(profile_id, _agent_fields(body))
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Agent profile not found")
+    return updated
+
+
+@app.delete("/api/agents/{profile_id}")
+def delete_agent(profile_id: str):
+    if not agent_store.delete(profile_id):
+        raise HTTPException(status_code=404, detail="Agent profile not found")
+    return {"ok": True}
+
+
+@app.get("/api/conversations/{cid}/notebook")
+def session_notebook(cid: str):
+    """The session as cells (questions, code steps with output, tool calls, answers), in order. Built from stored events only."""
+    from biomni_ui import notebook
+
+    conv = store.get_conversation(cid)
+    if conv is None:
+        raise HTTPException(status_code=404, detail="No such session")
+    return {"title": conv.get("title", ""), "environment": notebook.environment(), "cells": notebook.build(conv)}
+
+
+SESSION_CONTEXT_CHARS = 4000
+
+
+def _session_digest(conversation_id: str) -> str:
+    """The recent questions and answers of one earlier session, as context for a new task (capped in size). Empty if there is none."""
+    conv = store.get_conversation(conversation_id) if conversation_id else None
+    if not conv:
+        return ""
+    lines: list[str] = []
+    for t in (conv.get("tasks") or [])[-4:]:
+        answer = next((e.get("text", "") for e in t.get("events", []) if e.get("type") == "answer"), "")
+        lines.append(f"Q: {str(t.get('prompt') or '')[:400]}")
+        if answer:
+            lines.append(f"A: {str(answer)[:900]}")
+    if not lines:
+        return ""
+    body = "\n".join(lines)[:SESSION_CONTEXT_CHARS]
+    return (f"The user referred to an earlier session “{conv.get('title', '')}”. Its recent exchanges follow, as context for this request "
+            f"(do not repeat them unless asked):\n{body}")
+
+
 @app.post("/api/tasks")
 def create_task(body: NewTask):
     project_id = store.conversation_project(body.conversation_id) if body.conversation_id else (body.project_id or "quick")
     if project_id != "quick" and not any(p["id"] == project_id for p in store.list_projects()):
         project_id = "quick"
     project = store.get_project_settings(project_id)
+    profile = agent_store.get(body.agent_id) if body.agent_id else None
+    if body.agent_id and profile is None:
+        raise HTTPException(status_code=400, detail="No such agent profile")
+    mode = profile["mode"] if profile else body.mode
+    tools_off = agents.tools_off_for(profile, project)
 
     extra = ""
     if body.approval:
         extra = assist.approved_prompt(body.prompt, body.approval.plan, body.approval.answers)
-    # skills the project attaches to every new task are mentioned like skills the user picked with "@"
+    # skills the project and the agent profile attach to every new task are mentioned like skills the user picked with "@"
     wanted = list(body.mentions)
     have = {(m.get("kind"), m.get("id")) for m in wanted}
-    wanted += [{"kind": "skill", "id": sid} for sid in project["skills"] if ("skill", sid) not in have]
+    attached = list(project["skills"]) + list((profile or {}).get("skills", []))
+    wanted += [{"kind": "skill", "id": sid} for sid in dict.fromkeys(attached) if ("skill", sid) not in have]
+    for m in wanted:  # a past session picked with "#": its recent exchanges go in as context
+        if m.get("kind") == "session":
+            digest = _session_digest(str(m.get("id") or ""))
+            if digest:
+                extra = "\n\n".join(x for x in (extra, digest) if x)
     if wanted and manager.agent_ready:
         agent = manager.agent()
         picked = mentions.to_prompt(
@@ -1194,10 +1918,24 @@ def create_task(body: NewTask):
     recent = store.recent_files(project_id, body.conversation_id) if prefs["prefs"]["use_last_results"] else []
     brief = ui_prefs.briefing(prefs, project, recent)
     extra = "\n\n".join(x for x in (extra, brief) if x)
+    project_files = [str(_upload_dir() / f) for f in project.get("files", []) if (_upload_dir() / f).is_file()]
+    if project_files:  # the project's own files: the agent opens them with python or bash when they are relevant
+        extra = "\n\n".join(x for x in (extra, "Files this project has (uploaded for it; open them when relevant):\n" + "\n".join(f"- {p}" for p in project_files)) if x)
+    pending, folder = [], None
+    if body.conversation_id:  # comments left on result files since the last message go with this one
+        from biomni_ui import annotations
+
+        folder = workdir.conversation_dir(body.conversation_id)
+        pending = annotations.take_pending(folder)
+        extra = "\n\n".join(x for x in (extra, annotations.as_prompt_text(pending)) if x)
     try:
-        task = manager.start(body.prompt.strip(), body.conversation_id, extra, mode=body.mode)
+        task = manager.start(body.prompt.strip(), body.conversation_id, extra, mode=mode, agent=profile, tools_off=tools_off)
     except Busy as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
+    if pending and folder is not None:
+        from biomni_ui import annotations
+
+        annotations.mark_sent(folder, [a["id"] for a in pending], task.id)
     if not body.conversation_id and project_id != "quick":
         store.set_project(task.conversation_id, project_id)
     return {"id": task.id, "conversation_id": task.conversation_id}
@@ -1216,7 +1954,8 @@ def _earlier_turns(conversation_id: str | None) -> list[tuple[str, str]]:
 @app.post("/api/plan")
 def draft_plan(body: PlanRequest):
     """Draft a plan (and clarifying questions) for the user to edit and approve before anything runs."""
-    llm = _llm()
+    _llm()  # the agent must be ready; the plan itself is drafted by the planner model chosen in Settings (or the main model)
+    llm = _planner_llm()
     try:
         return assist.draft_plan(llm, body.prompt.strip(), _earlier_turns(body.conversation_id))
     except Exception as e:
@@ -1228,6 +1967,37 @@ def cancel_task(task_id: str):
     if not manager.cancel(task_id):
         raise HTTPException(status_code=404, detail="Task not found or already finished")
     return {"ok": True}
+
+
+class PermissionAnswerIn(BaseModel):
+    id: str = Field(min_length=4, max_length=40)
+    choice: str = Field(pattern="^(once|conversation|project|global|deny)$")
+
+
+@app.post("/api/tasks/{task_id}/permission")
+def answer_permission(task_id: str, body: PermissionAnswerIn):
+    """The user's answer to a database-permission request raised by a task (see permissions.py)."""
+    from biomni_ui import permissions
+
+    if not permissions.answer(body.id, body.choice):
+        raise HTTPException(status_code=400, detail="Could not record the answer")
+    return {"ok": True}
+
+
+@app.get("/api/grants")
+def list_grants():
+    from biomni_ui import permissions
+
+    return {"grants": permissions.listing()}
+
+
+@app.delete("/api/grants")
+def revoke_grant(scope: str, tool: str, key: str = ""):
+    from biomni_ui import permissions
+
+    if not permissions.remove(scope, tool, key or None):
+        raise HTTPException(status_code=404, detail="No such standing permission")
+    return {"grants": permissions.listing()}
 
 
 def _finished_task(task_id: str) -> tuple[dict, list[dict], list[tuple[str, str]]]:
@@ -1257,7 +2027,10 @@ def _llm():
 @app.post("/api/tasks/{task_id}/review")
 def review_task(task_id: str):
     task, events, earlier = _finished_task(task_id)
-    llm = _llm()
+    s = ui_settings.load(SETTINGS_FILE)  # the reviewer model and level chosen in Settings (None: the main model)
+    reviewer = _role_entry("reviewer_model_id")
+    eff = s.get("reviewer_effort")
+    llm = _build_llm(entry=reviewer, effort=eff, search=False) if (reviewer or eff) else _llm()
     try:
         text = assist.review(llm, task["prompt"], events, earlier)
     except Exception as e:

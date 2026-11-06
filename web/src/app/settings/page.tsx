@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { ModelsSection } from "@/components/settings/models-section";
+import { ModelRolesSection } from "@/components/settings/model-roles-section";
+import { DatabasesSection } from "@/components/settings/databases-section";
 import { AgentSection, ConnectionsSection, DataSection, UsageSection } from "@/components/settings/other-sections";
 import { PersonalizationSection, ProfileSection } from "@/components/settings/prefs-sections";
-import { MemorySection } from "@/components/settings/memory-section";
+import { GitHubTokenCard } from "@/components/settings/github-token";
+import { MemorySettingsSection } from "@/components/settings/memory-settings";
 import { ProjectsSection } from "@/components/settings/projects-section";
 import { useI18n } from "@/lib/i18n";
 
@@ -17,8 +20,10 @@ const GROUPS: { label: string; items: { id: string; label: string; icon: string 
       { id: "personalization", label: "Personalisation", icon: "✦" },
       { id: "projects", label: "Projects", icon: "▤" },
       { id: "models", label: "Models", icon: "◈" },
+      { id: "helpers", label: "Helper models", icon: "⇶" },
       { id: "agent", label: "Agent", icon: "⚙" },
-      { id: "memory", label: "Remember and database", icon: "✎" },
+      { id: "memory", label: "Memory", icon: "✎" },
+      { id: "databases", label: "Databases", icon: "▦" },
       { id: "usage", label: "Usage", icon: "▥" },
     ],
   },
@@ -42,14 +47,23 @@ function Section({ id }: { id: string }) {
       return <ProjectsSection />;
     case "models":
       return <ModelsSection />;
+    case "helpers":
+      return <ModelRolesSection />;
+    case "databases":
+      return <DatabasesSection />;
     case "agent":
       return <AgentSection />;
     case "usage":
       return <UsageSection />;
     case "memory":
-      return <MemorySection />;
+      return <MemorySettingsSection />;
     case "connections":
-      return <ConnectionsSection />;
+      return (
+        <>
+          <ConnectionsSection />
+          <GitHubTokenCard />
+        </>
+      );
     default:
       return <DataSection />;
   }

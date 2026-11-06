@@ -1,11 +1,24 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { relativeTime } from "@/lib/time";
 import { useI18n } from "@/lib/i18n";
-import type { ConversationSummary, Project } from "@/lib/api";
+import type { ConversationSummary, Project, SearchHit } from "@/lib/api";
 
 const PIN_KEY = "pinnedConversations";
+const COLLAPSED_KEY = "collapsedProjects";
+
+type Group = { key: string; label: string; project?: Project; items: ConversationSummary[] };
+
+function readCollapsed(): Set<string> {
+  try {
+    const v = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]");
+    return new Set(Array.isArray(v) ? v.filter((x) => typeof x === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
 
 function readPins(): string[] {
   try {
@@ -46,16 +59,28 @@ export function HistoryList({
   query,
   runningId,
   projects = [],
+  view = "time",
+  activeProject,
+  onSelectProject,
+  onNewInProject,
+  hits = null,
   onOpen,
   onRename,
   onMove,
   onDelete,
 }: {
   convs: ConversationSummary[];
+  /** search results across all sessions (titles, questions and answers); null: show the normal list */
+  hits?: SearchHit[] | null;
   activeId: string | null;
   query: string;
   runningId: string | null;
   projects?: Project[];
+  /** "project": every project is a section with its own sessions; "time": the sessions by day, as before */
+  view?: "project" | "time";
+  activeProject?: string;
+  onSelectProject?: (id: string) => void;
+  onNewInProject?: (id: string) => void;
   onMove?: (c: ConversationSummary, projectId: string) => void;
   onOpen: (id: string) => void;
   onRename: (c: ConversationSummary, title: string) => void;
@@ -63,6 +88,7 @@ export function HistoryList({
 }) {
   const { t } = useI18n();
   const [pins, setPins] = useState<string[]>([]);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
@@ -73,6 +99,7 @@ export function HistoryList({
   useEffect(() => {
     const timer = setTimeout(() => {
       setPins(readPins());
+      setCollapsed(readCollapsed());
       setNow(Date.now());
     }, 0);
     const tick = setInterval(() => setNow(Date.now()), 60_000);
@@ -106,18 +133,38 @@ export function HistoryList({
       return next;
     });
 
-  const groups = useMemo(() => {
+  const groups = useMemo<Group[]>(() => {
     const q = query.trim().toLowerCase();
     const rows = convs.filter((c) => !q || c.title.toLowerCase().includes(q));
-    const out: { label: string; items: ConversationSummary[] }[] = [];
-    const add = (label: string, items: ConversationSummary[]) => items.length && out.push({ label, items });
+    if (view === "project") {
+      // Every project is a section (even an empty one), holding its own sessions, newest first.
+      return projects.map((p) => ({
+        key: p.id,
+        label: p.name,
+        project: p,
+        items: rows.filter((c) => (c.project_id ?? "quick") === p.id).sort((a, b) => b.updated - a.updated),
+      }));
+    }
+    const out: Group[] = [];
+    const add = (label: string, items: ConversationSummary[]) => items.length && out.push({ key: label, label, items });
     add("Pinned", rows.filter((c) => pins.includes(c.id)));
     const rest = rows.filter((c) => !pins.includes(c.id));
     for (const label of ["Today", "Yesterday", "Within 7 days", "Earlier"] as const) {
       add(label, rest.filter((c) => dayBucket(c.updated, now || c.updated * 1000) === label));
     }
     return out;
-  }, [convs, query, pins, now]);
+  }, [convs, query, pins, now, view, projects]);
+
+  const toggleCollapsed = (key: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      try {
+        localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]));
+      } catch {}
+      return next;
+    });
 
   const commit = (c: ConversationSummary) => {
     const title = draft.trim();
@@ -125,16 +172,73 @@ export function HistoryList({
     if (title && title !== c.title) onRename(c, title);
   };
 
+  if (hits) {
+    if (hits.length === 0) return <p className="px-2 text-xs text-soft">{t("No sessions match this search")}</p>;
+    const projectName = (pid: string) => {
+      const p = projects.find((x) => x.id === pid);
+      return p ? (p.default ? t(p.name) : p.name) : pid;
+    };
+    return (
+      <ul className="space-y-1">
+        {hits.map((h) => (
+          <li key={h.id}>
+            <button
+              type="button"
+              onClick={() => onOpen(h.id)}
+              className={`w-full rounded-md px-2 py-1.5 text-left text-sm ${h.id === activeId ? "bg-accent-soft" : "hover:bg-card"}`}
+            >
+              <span className="block truncate">{h.title}</span>
+              <span className="block truncate text-xs text-soft">
+                {projectName(h.project_id)}
+                {h.snippet ? ` · ${h.snippet}` : ""}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
   if (groups.length === 0) {
     return <p className="px-2 text-xs text-soft">{convs.length ? t("No matching records") : t("No task history yet")}</p>;
   }
 
   return (
     <div className="space-y-2">
-      {groups.map((g) => (
-        <section key={g.label}>
-          <h4 className="px-2 pb-0.5 text-[11px] tracking-wider text-soft">{t(g.label)}</h4>
+      {groups.map((g) => {
+        const isOpen = !collapsed.has(g.key);
+        return (
+        <section key={g.key}>
+          {g.project ? (
+            <div className={`flex items-center gap-1 rounded-md px-1 py-1 ${activeProject === g.key ? "bg-accent-soft" : ""}`}>
+              <button
+                type="button"
+                onClick={() => toggleCollapsed(g.key)}
+                aria-expanded={isOpen}
+                aria-label={isOpen ? t("Collapse project") : t("Expand project")}
+                className="w-4 shrink-0 text-xs text-soft"
+              >
+                {isOpen ? "▾" : "▸"}
+              </button>
+              <button type="button" onClick={() => onSelectProject?.(g.key)} title={t("Make this the current project")} className="min-w-0 flex-1 truncate text-left text-xs font-medium">
+                {g.project.default ? t(g.label) : g.label}
+                <span className="ml-1 font-normal text-soft">({g.items.length})</span>
+              </button>
+              <Link href={`/project?id=${encodeURIComponent(g.key)}`} title={t("Open project page")} aria-label={t("Open project page")} className="shrink-0 px-1 text-xs text-soft hover:text-accent">
+                ↗
+              </Link>
+              {onNewInProject && (
+                <button type="button" onClick={() => onNewInProject(g.key)} title={t("New task in this project")} aria-label={t("New task in this project")} className="shrink-0 px-1 text-sm text-soft hover:text-accent">
+                  ＋
+                </button>
+              )}
+            </div>
+          ) : (
+            <h4 className="px-2 pb-0.5 text-[11px] tracking-wider text-soft">{t(g.label)}</h4>
+          )}
+          {isOpen && (
           <ul className="space-y-0.5">
+            {g.items.length === 0 && g.project && <li className="px-2 py-1 text-xs text-soft">{t("No sessions yet")}</li>}
             {g.items.map((c) => (
               <li
                 key={c.id}
@@ -264,8 +368,10 @@ export function HistoryList({
               </li>
             ))}
           </ul>
+          )}
         </section>
-      ))}
+        );
+      })}
     </div>
   );
 }

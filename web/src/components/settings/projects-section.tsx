@@ -2,16 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  OPTIONAL_TOOLS,
   createProject,
   deleteProject,
   getProjectSettings,
   listProjects,
   listSkills,
+  listUploads,
   putProjectSettings,
   renameProject,
   type Project,
   type ProjectSettings,
   type Skill,
+  type Upload,
 } from "@/lib/api";
 import { Card, ListEditor, SaveBadge, inputCls, useAutosave } from "@/components/settings/ui";
 import { tr, useI18n } from "@/lib/i18n";
@@ -27,6 +30,11 @@ export function ProjectsSection() {
   const [loaded, setLoaded] = useState<{ id: string; value: ProjectSettings } | null>(null);
   const [value, setValue] = useState<ProjectSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [uploads, setUploads] = useState<Upload[]>([]);
+
+  useEffect(() => {
+    listUploads().then(setUploads).catch(() => setUploads([]));
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -219,6 +227,59 @@ export function ProjectsSection() {
               </ul>
             )}
             <SaveBadge {...status} />
+          </Card>
+
+          <Card
+            title={t("Files for this project")}
+            hint={t("Files uploaded to the Drive. Every task in this project is told where they are, so the agent can open them when they are relevant.")}
+          >
+            {uploads.length === 0 ? (
+              <p className="text-sm text-soft">{t("No uploaded files yet. Upload them from the Drive in the workspace.")}</p>
+            ) : (
+              <ul className="grid gap-2 sm:grid-cols-2">
+                {uploads.map((u) => {
+                  const on = (value.files ?? []).includes(u.name);
+                  return (
+                    <li key={u.name}>
+                      <button
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => setValue({ ...value, files: on ? value.files.filter((x) => x !== u.name) : [...(value.files ?? []), u.name] })}
+                        className={`h-full w-full rounded-lg border p-3 text-left text-sm ${on ? "border-accent bg-accent-soft" : "border-line hover:border-accent"}`}
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="truncate">{u.name}</span>
+                          {on && <span className="text-accent">✓</span>}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Card>
+
+          <Card
+            title={t("Tools switched off for this project")}
+            hint={t("A switched-off tool is not offered to the agent in any task of this project.")}
+          >
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {OPTIONAL_TOOLS.map((tool) => {
+                const off = (value.tools_off ?? []).includes(tool.id);
+                return (
+                  <li key={tool.id}>
+                    <button
+                      type="button"
+                      aria-pressed={off}
+                      onClick={() => setValue({ ...value, tools_off: off ? value.tools_off.filter((x) => x !== tool.id) : [...(value.tools_off ?? []), tool.id] })}
+                      className={`h-full w-full rounded-lg border p-3 text-left text-sm ${off ? "border-warn bg-card" : "border-line hover:border-accent"}`}
+                    >
+                      {t(tool.label)} {off && <span className="text-warn">· {t("off")}</span>}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           </Card>
         </>
       )}

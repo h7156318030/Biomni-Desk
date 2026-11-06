@@ -23,7 +23,7 @@ class Gate(unittest.TestCase):
             self.assertTrue(research.wants_research(q), q)
 
     def test_everything_else_goes_to_the_agent_and_its_tools(self):
-        for q in ["示例医药是做什么的？最近有什么公开合作？", "查询示例生物的临床研究", "示例生物近两年有什么进展", "对比两家公司的管线",
+        for q in ["上海佰炼医药是做什么的？最近有什么公开合作？", "查询君赛生物的临床研究", "示例生物近两年有什么进展", "对比两家公司的管线",
                   "TP53 在乳腺癌中的作用机制和相关文献", "查一下本月发表的CAR-T文献", "查最近的论文"]:
             self.assertFalse(research.wants_research(q), q)
 

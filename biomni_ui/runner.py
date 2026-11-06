@@ -12,12 +12,37 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from biomni_ui import audit, chat_api, clinical, codex_llm, effort, files, llm_calls, native_agent, research, scout, workdir
+from biomni_ui import audit, chat_api, clinical, codex_llm, effort, files, llm_calls, native_agent, research, scout, workdir, worklog
 from biomni_ui import effort as effort_levels
 from biomni_ui.events import message_to_events
 from biomni_ui.store import Store
 
 HEARTBEAT_SECONDS = 15
+
+
+def _receipt_count(work: Path) -> int:
+    from biomni_ui import receipts
+
+    try:
+        return receipts.count(work)
+    except Exception:
+        return 0
+
+
+def _write_task_qc(work: Path, start: int, answer: str, seen: str) -> str | None:
+    """Save this task's QC summary: failed calls with no later success, and specifics or identifiers the answer uses that the tool output lacks.
+
+    Returns the relative path of the saved file, or None if it could not be written. The task itself never depends on this.
+    """
+    from biomni_ui import receipts
+
+    try:
+        mine = receipts.read_all(work)[start:]
+        unverified = [item["text"] for item in audit.ungrounded(answer, seen)]
+        unsupported = audit.unsupported(answer, seen)
+        return receipts.write_qc(work, receipts.qc_summary(mine, unverified, unsupported))
+    except Exception:
+        return None
 
 # Appended to every task: citations the UI can check, and a fixed answer layout.
 CITE_HINT = (
@@ -154,9 +179,29 @@ class Busy(RuntimeError):
     """Another task is still running (A1 holds one conversation state at a time)."""
 
 
+def _loop_target(llm: Any) -> tuple[str, dict[str, Any] | None] | None:
+    """(model name, chat-endpoint parameters, or None for the ChatGPT backend) for a model object; None if it cannot run the loop."""
+    from biomni_ui import chatgpt_api
+
+    inner = getattr(llm, "_inner", llm)
+    if type(inner).__name__ == "ChatCodex" and chatgpt_api.is_logged_in():
+        return codex_llm.resolve_model(getattr(inner, "model", None)), None
+    if type(inner).__name__ == "ChatOpenAI":
+        key = getattr(inner, "openai_api_key", None)
+        key = key.get_secret_value() if hasattr(key, "get_secret_value") else key
+        base = getattr(inner, "openai_api_base", None)
+        model = getattr(inner, "model_name", None) or getattr(inner, "model", None)
+        if key and base and model:
+            return str(model), {"base_url": str(base), "api_key": str(key), "extra": dict(getattr(inner, "extra_body", None) or {})}
+    return None
+
+
 class Task:
-    def __init__(self, prompt: str, conversation_id: str, store: Store | None = None, extra: str = "", mode: str = "ask"):
+    def __init__(self, prompt: str, conversation_id: str, store: Store | None = None, extra: str = "", mode: str = "ask",
+                 agent: dict[str, Any] | None = None, tools_off: set[str] | None = None):
         self.id = uuid.uuid4().hex[:12]
+        self.agent = dict(agent or {})  # the agent profile the task runs with (model, effort, instructions); empty means the app's current settings
+        self.tools_off = set(tools_off or ())  # optional tools switched off for this task (profile and project choices)
         self.mode = mode if mode in ("plan", "ask", "auto") else "ask"
         self.allow_ask = self.mode == "ask"  # only the ask mode lets the agent stop and ask the user mid-task
         self.prompt = prompt
@@ -341,11 +386,12 @@ class Manager:
     def get(self, task_id: str) -> Task | None:
         return self._tasks.get(task_id)
 
-    def start(self, prompt: str, conversation_id: str | None = None, extra: str = "", mode: str = "ask") -> Task:
+    def start(self, prompt: str, conversation_id: str | None = None, extra: str = "", mode: str = "ask", agent: dict[str, Any] | None = None,
+              tools_off: set[str] | None = None) -> Task:
         with self._start_lock:
             if not self._procs and self.busy:
                 raise Busy("A task is already running")
-            task = Task(prompt, conversation_id or uuid.uuid4().hex[:12], self.store, extra, mode=mode)
+            task = Task(prompt, conversation_id or uuid.uuid4().hex[:12], self.store, extra, mode=mode, agent=agent, tools_off=tools_off)
             self._tasks[task.id] = task
             self._current = task
         if self._procs:
@@ -391,13 +437,20 @@ class Manager:
             getattr(task, "restore_effort", lambda: None)()
             llm_calls.set_draft_sink(None)
 
-    def _artifacts(self, paths: list[str]) -> list[dict[str, Any]]:
+    def _artifacts(self, paths: list[str], task: Task | None = None) -> list[dict[str, Any]]:
+        from biomni_ui import versions
+
         out, seen = [], set()
         for p in paths:
             real = files.resolve(p, self.roots)
             if real and real not in seen:
                 seen.add(real)
                 out.append(files.describe(real))
+                if task is not None:  # keep this content as a version when it is new for the file (see versions.py)
+                    try:
+                        versions.record(workdir.conversation_dir(task.conversation_id), real, task.id)
+                    except Exception:  # a version that cannot be kept must not hide the result
+                        pass
         return out
 
     def _emit_step(self, task: Task):
@@ -416,7 +469,7 @@ class Manager:
 
                 ev = {**ev, "files": given + [p for p in extract_files(ev["text"]) if p not in given]}
 
-                ev["artifacts"] = self._artifacts(ev["files"])
+                ev["artifacts"] = self._artifacts(ev["files"], task)
 
             task.emit(ev)
 
@@ -605,24 +658,40 @@ class Manager:
         """What this conversation said so far. Kept in memory; after a restart it is rebuilt from the stored questions and answers,
         so a follow-up ("that earlier result") still has its context (the official app injects the history; ours must not lose it on a restart)."""
         items = self._native.get(conversation_id)
-        if items or not self.store:
+        if items:
             return items
+        # the work of a task that was cut short (a stop or a restart) comes after the finished exchanges, so "continue" picks it up
+        resumed = native_agent.load_resume(conversation_id)
+        if not self.store:
+            return resumed
         try:
             conv = self.store.get_conversation(conversation_id)
         except Exception:
-            return []
+            return resumed
         out: list[dict[str, Any]] = []
         for t in (conv or {}).get("tasks", []):
             answer = next((e.get("text", "") for e in t.get("events", []) if e.get("type") == "answer"), "")
             if answer:
                 out.append({"type": "message", "role": "user", "content": [{"type": "input_text", "text": t["prompt"]}]})
                 out.append({"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": answer[:4000]}]})
-        return out[-20:]
+        return out[-20:] + resumed
+
+    def _checkpoint(self, conversation_id: str, items: list[dict[str, Any]]) -> None:
+        """Keep the work so far, in memory and on disk, so that a task cut short by a stop or a restart can be continued."""
+        try:
+            self._native.put(conversation_id, native_agent.complete_exchange(items))
+            native_agent.save_resume(conversation_id, self._native.get(conversation_id))
+        except Exception as e:  # keeping the work is a safety net; it must not stop the task
+            print(f"could not keep the work so far: {type(e).__name__}: {e}")
 
     def _native_lane(self, agent, task: Task) -> bool:
         """The one agent loop: function calling with plain shell steps. False means the model cannot call tools (the task says so)."""
         from biomni_ui import chatgpt_api
 
+        profile = task.agent or {}
+        factory = getattr(self, "llm_for_profile", None)
+        if factory is not None and (profile.get("model_id") or profile.get("effort")):
+            agent = type("ProfileAgent", (), {"llm": factory(profile)})()  # this profile's model and effort; the default agent keeps its own
         llm = getattr(agent, "llm", None)
         inner = getattr(llm, "_inner", llm)
         chat = None  # (base_url, api_key, extra body) when the model sits on a chat-completions endpoint instead of the ChatGPT backend
@@ -650,8 +719,38 @@ class Manager:
         _, load_skill = self._skill_catalog()
         find_skill = self._skill_finder() if os.environ.get("BIOMNI_UI_SKILLS", "1") == "1" else None
         work = workdir.conversation_dir(task.conversation_id)  # this conversation's own folder: shell, Python session, results, trace
+        receipt_start = _receipt_count(work)  # receipts are per conversation; this task's QC summary covers only the ones after this point
         from biomni_ui import environment, notes as user_notes  # the packages and R on this machine; what the user asked to keep
-        instructions = "\n\n".join(x for x in (native_agent.system_prompt(style, catalog), workspace_line(work), today_line(), environment.line(), user_notes.block()) if x)
+        project_id = self.store.conversation_project(task.conversation_id) if self.store else None  # the notes that belong to this project
+        if project_id == "quick":
+            project_id = None
+
+        def permit(tool: str, call_id: str) -> str:
+            """Allow or refuse one database connector call: a standing grant, or the user's answer in the chat (see permissions.py)."""
+            from biomni_ui import connectors as _connectors, permissions
+
+            return permissions.decide(tool, _connectors.group_of(tool) or tool, task.conversation_id, project_id,
+                                      interactive=task.mode != "auto", emit=self._emit_step(task), cancel=lambda: task.cancel_requested)
+
+        roles = self._roles()  # Settings: sub-agent count and effort, the image model, memory switches
+        # The sub-agents' model, when Settings chooses one different from the main model (see native_agent._delegate).
+        delegate_model, delegate_call = None, None
+        factory = getattr(self, "subagent_llm", None)
+        try:
+            sub_llm = factory() if factory else None
+            target = _loop_target(sub_llm) if sub_llm is not None else None
+        except Exception:  # a sub-agent model that cannot be built falls back to the main model, which is visible in Settings
+            target = None
+        if target is not None:
+            delegate_model, endpoint = target
+            if endpoint is not None:
+                from biomni_ui import chat_api as _chat_api
+
+                def delegate_call(m, e, instr, its, tools, on_text=None, _ep=endpoint):
+                    return _chat_api.call_chat(_ep["base_url"], _ep["api_key"], m, instr, its, tools, on_text, _ep["extra"])
+        memory_on = bool(self.store.get_project_settings(project_id or "quick").get("memory_on", True)) if self.store else True  # the project's memory switch
+        instructions = "\n\n".join(x for x in (native_agent.system_prompt(style, catalog), workspace_line(work), today_line(), environment.line(), user_notes.recall(task.prompt, project_id, enabled=memory_on, budget=roles.get("memory_recall_chars")),
+                                                                                     worklog.block(project_id, query=task.prompt, exclude_conversation=task.conversation_id, budget=roles.get("memory_recall_chars"), enabled=memory_on)) if x)
         from biomni_ui import relevant  # the Biomni functions and skills this question calls for, as the official A1 lists its functions per task
         if relevant.enabled():
             try:
@@ -663,10 +762,17 @@ class Manager:
                     instructions += "\n\n" + related
             except Exception:  # a missing list is not a reason to stop the task
                 pass
+        n_sub = int(roles.get("subagent_max") or 3)
+        if n_sub > 1:  # the work split: independent parts run side by side, the rest stays with the main agent
+            instructions += (f"\n\nSub-agents: up to {n_sub} can run at once (delegate_task). When the question has parts that do not depend on each other "
+                             "(several samples, databases, papers or identifiers), start each part as a sub-agent in the same round so they run in parallel, "
+                             "and keep the steps that need your own view. Use wait_subagents only when a result is needed for your next step.")
         if not task.allow_ask:
             instructions += "\n\nThis task cannot ask questions midway: where unsure, continue with the most plausible reading and state your assumption in the answer."
         if chat is None and os.environ.get("BIOMNI_UI_FUNC_SEARCH", "1") == "0":  # the old ChatGPT-only search: the model never sees our page numbers, so it cites full addresses
             instructions += "\n\nWhen citing a web page, write the full URL in the form [caption](full URL). Do not write [@N]: you cannot see those numbers."
+        if (task.agent or {}).get("instructions"):  # this agent profile's own instructions
+            instructions += "\n\n## Instructions of this agent profile (the user set these; follow them unless they conflict with the question)\n" + task.agent["instructions"]
         instructions += "\n\n" + answer_language(task.prompt)  # last, so the answer language follows the question
         question = f"{task.prompt}\n\n{task.extra}".strip() if task.extra else task.prompt
         emit = self._emit_step(task)
@@ -695,11 +801,17 @@ class Manager:
 
             extra_kw = {"call": lambda m, e, instr, its, tools, on_text=None: chat_api.call_chat(base_url, api_key, m, instr, its, tools, on_text, light(extra_body) if e == "judge" else extra_body),
                         "tools_fn": lambda: native_agent.chat_tools_list(question)}
+        if task.tools_off:  # optional tools this task's profile or project has switched off: they are not offered to the model
+            off = set(task.tools_off)
+            base_tools = extra_kw.get("tools_fn") or native_agent.active_tools
+            extra_kw["tools_fn"] = lambda: [t for t in base_tools() if t.get("name") not in off and not (t.get("type") == "web_search" and "web_search" in off)]
         try:
             answer, items, steps = native_agent.run(
             session=task.conversation_id, model=model, effort=eff, question=question, history=self._native_history(task.conversation_id), instructions=instructions, emit=emit, find_skill=find_skill,
+            checkpoint=lambda items, _cid=task.conversation_id: self._checkpoint(_cid, items),
             cancel=lambda: task.cancel_requested, cwd=work, load_skill=load_skill, on_text=llm_calls.push_draft, nudge=nudge, escalate_to=eff, allow_ask=task.allow_ask,
-            mid_effort=None, **extra_kw,  # after a tool result the same level as the answer: reading results and writing the answer use the starting tier, not less
+            mid_effort=None, project_id=project_id, permit=permit, delegate_model=delegate_model, delegate_call=delegate_call, **extra_kw,  # after a tool result the same level as the answer: reading results and writing the answer use the starting tier, not less
+            delegate_effort=roles.get("subagent_effort") or "medium", max_parallel=int(roles.get("subagent_max") or 3), image_call=self._image_call(),
         )
         except chat_api.ToolsUnsupported as e:
             task.draft_as_answer = False
@@ -709,16 +821,71 @@ class Manager:
             task.emit({"type": "cancelled"})
             return True
         self._native.put(task.conversation_id, items)
+        native_agent.clear_resume(task.conversation_id)  # the task finished: nothing is left to continue
         if not answer:
             answer = "No answer was received. Please try again or rephrase the question."
         seen = "\n".join([question, audit.evidence_from_events(task.events), native_agent.evidence_text(items)])  # what the model was shown; not its own queries, code or timestamps
+        _write_task_qc(work, receipt_start, answer, seen)  # saved for review only; the answer text below is unchanged
         # The answer is shown as written. No verification notes are added after it: the audit functions in audit.py are kept for evaluation only.
         note = ""
         if steps == 0 and len(answer) > 60 and audit.has_identifiers(answer) and not audit.looks_like_calculation(task.prompt):
             note += audit.NO_TOOLS_NOTE  # identifiers or addresses with no search behind them; a plain explanation or calculation needs no warning
         task.emit({"type": "answer", "text": answer + note})
         task.emit({"type": "done"})
+        if memory_on:  # the project's work log: what this task did, for later tasks in the project (no model call)
+            try:
+                worklog.record(project_id, task.conversation_id, task.id, task.prompt, answer)
+            except OSError as e:
+                print(f"work log not saved: {type(e).__name__}: {e}")
+        if memory_on and roles.get("memory_auto", True):
+            self._learn_later(task.prompt, answer, project_id, llm)
         return True
+
+    def _roles(self) -> dict[str, Any]:
+        """The Settings the loop reads (sub-agent count and effort, image model, memory switches). Missing values read as their defaults."""
+        fn = getattr(self, "role_settings", None)
+        try:
+            return dict(fn()) if fn else {}
+        except Exception:  # Settings that cannot be read fall back to the defaults, not to a failed task
+            return {}
+
+    def _image_call(self):
+        """(path, question) -> the image model's answer, when Settings sets an image model; None otherwise. Paths are limited to the
+        workspace and uploads, like every other file the agent opens."""
+        fn = getattr(self, "image_target", None)
+        try:
+            target = fn() if fn else None
+        except Exception:
+            target = None
+        if not target:
+            return None
+        from biomni_ui import vision
+
+        base, key, name = target
+
+        def call(path: str, question: str) -> str:
+            real = files.resolve(path, self.roots)
+            if not real:
+                return "That file is not in the workspace or uploads, so it cannot be opened."
+            return vision.describe(base, key, name, Path(real), question)
+
+        return call
+
+    def _learn_later(self, question: str, answer: str, project_id: str | None, llm: Any) -> None:
+        """Suggest lasting facts from a finished answer for the user's memory, in the background. Suggestions wait for approval in
+        Settings, so nothing here changes what a task uses; any failure is logged and the answer already shown is not affected."""
+        if llm is None:
+            return
+
+        def run() -> None:
+            try:
+                from biomni_ui import assist, notes as user_notes
+
+                user_notes.learn(question, answer, project_id, lambda system, user: assist._ask(llm, system, user))
+            except Exception as e:  # memory is an extra; a failed suggestion is not an error for the user
+                print(f"memory suggestions skipped: {type(e).__name__}: {e}")
+
+        threading.Thread(target=run, name="memory-suggest", daemon=True).start()
 
     def _drive(self, agent, task: Task) -> None:
         """Run one task with the native loop, the only agent path. A model that cannot call tools cannot run it: the task says so."""

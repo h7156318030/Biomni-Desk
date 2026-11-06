@@ -60,7 +60,7 @@ def de_deseq2(counts: str, metadata: str, condition: str, treat: str, ref: str, 
     # n_cpus=1: pydeseq2 otherwise starts joblib worker processes, which fail intermittently on Windows
     dds = DeseqDataSet(counts=cm, metadata=md, design=f"~{condition}", quiet=True, n_cpus=1)
     dds.deseq2()
-    stats = DeseqStats(dds, contrast=[condition, treat, ref], alpha=alpha, quiet=True)
+    stats = DeseqStats(dds, contrast=[condition, treat, ref], alpha=alpha, quiet=True, n_cpus=1)  # the Wald test has its own worker pool: keep it in-process too
     stats.summary()
     res = stats.results_df.sort_values("padj")
     res.to_csv(f"{out}_results.csv")

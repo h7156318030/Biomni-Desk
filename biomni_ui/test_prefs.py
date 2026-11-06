@@ -76,7 +76,7 @@ class ProjectSettingsInStore(unittest.TestCase):
         self.addCleanup(self.store.close)
 
     def test_settings_roundtrip_default_and_custom_project(self):
-        self.assertEqual(self.store.get_project_settings("quick"), {"context": "", "instructions": [], "skills": []})
+        self.assertEqual(self.store.get_project_settings("quick"), {"context": "", "instructions": [], "skills": [], "files": [], "tools_off": [], "memory_on": True})
         self.assertTrue(self.store.set_project_settings("quick", {"context": "c", "instructions": ["i"], "skills": ["s"]}))
         self.assertEqual(self.store.get_project_settings("quick")["context"], "c")
         self.assertFalse(self.store.set_project_settings("nope", {"context": "x"}))

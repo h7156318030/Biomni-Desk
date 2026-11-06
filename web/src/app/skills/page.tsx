@@ -11,6 +11,10 @@ import {
   createSkill,
   deleteSkill,
   getSkill,
+  importSkill,
+  applySkillUpdates,
+  checkSkillUpdates,
+  type SkillUpdate,
   listSkills,
   toggleSkill,
   updateSkill,
@@ -69,6 +73,39 @@ export default function SkillsPage() {
   const [editing, setEditing] = useState<SkillInput | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [importUrl, setImportUrl] = useState("");
+  const [importMsg, setImportMsg] = useState("");
+  const [updates, setUpdates] = useState<SkillUpdate[] | null>(null);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [checking, setChecking] = useState(false);
+  const [updateMsg, setUpdateMsg] = useState("");
+
+  const checkUpdates = async () => {
+    setChecking(true);
+    setUpdateMsg("");
+    try {
+      const r = await checkSkillUpdates();
+      setUpdates(r.updates);
+      setPicked(r.updates.filter((u) => u.changed).map((u) => u.skill_id));
+    } catch (e) {
+      setUpdates(null);
+      setUpdateMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const applyUpdates = async () => {
+    try {
+      const r = await applySkillUpdates(picked);
+      setUpdateMsg(t("Updated {n} skill(s).", { n: r.updated.length }));
+      setUpdates(null);
+      setPicked([]);
+      await refresh();
+    } catch (e) {
+      setUpdateMsg(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   const refresh = useCallback(async () => {
     try {
@@ -77,6 +114,18 @@ export default function SkillsPage() {
       setError(e instanceof Error ? e.message : String(e));
     }
   }, []);
+
+  const importFromUrl = async () => {
+    setImportMsg("");
+    try {
+      const skill = await importSkill(importUrl.trim());
+      setImportMsg(`${t("Imported")}: ${skill.title}. ${t("It is now one of your skills; check it before you rely on it.")}`);
+      setImportUrl("");
+      await refresh();
+    } catch (e) {
+      setImportMsg(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   useEffect(() => {
     const timer = setTimeout(refresh, 0);
@@ -172,6 +221,66 @@ export default function SkillsPage() {
                 ＋ {t("New skill")}
               </button>
             </header>
+
+            <div className="mt-5 rounded-xl border border-line bg-card p-3">
+              <p className="text-xs text-soft">{t("Import a skill from a web address: a raw Markdown file, or a GitHub file page. Only import skills you trust, because the agent follows their text.")}</p>
+              <p className="mt-1 text-xs">
+                <a href="/library" className="text-accent hover:underline">
+                  {t("Or browse the community library (curated skills, tools and databases) →")}
+                </a>
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <input
+                  value={importUrl}
+                  onChange={(e) => setImportUrl(e.target.value)}
+                  placeholder="https://github.com/owner/repo/blob/main/skill.md"
+                  aria-label={t("Skill address")}
+                  className="min-w-0 flex-1 rounded-lg border border-line bg-paper px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+                <button type="button" disabled={!importUrl.trim()} onClick={importFromUrl} className="rounded-lg border border-line px-4 py-2 text-sm hover:border-accent disabled:opacity-50">
+                  {t("Import")}
+                </button>
+              </div>
+              {importMsg && <p className="mt-2 text-xs text-soft">{importMsg}</p>}
+              <div className="mt-3 border-t border-line pt-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-soft">{t("Imported skills from GitHub are checked for changes only when you ask. Changed ones are selected; nothing is replaced until you apply.")}</p>
+                  <button type="button" onClick={checkUpdates} disabled={checking} className="rounded-lg border border-line px-3 py-1 text-xs hover:border-accent disabled:opacity-50">
+                    {checking ? t("Checking…") : t("Check for updates")}
+                  </button>
+                </div>
+                {updates !== null && (
+                  <div className="mt-2 space-y-2">
+                    {updates.length === 0 ? (
+                      <p className="text-xs text-soft">{t("All imported skills are up to date.")}</p>
+                    ) : (
+                      <>
+                        <ul className="space-y-1">
+                          {updates.map((u) => (
+                            <li key={u.skill_id} className="flex items-center gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={picked.includes(u.skill_id)}
+                                onChange={(e) => setPicked((p) => (e.target.checked ? [...p, u.skill_id] : p.filter((x) => x !== u.skill_id)))}
+                                aria-label={t("Update {name}", { name: u.title })}
+                              />
+                              <span>{u.title}</span>
+                              <span className="text-xs text-soft">
+                                {u.changed ? t("changed upstream") : t("newer commit, same content")}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                        <button type="button" onClick={applyUpdates} disabled={picked.length === 0} className="rounded-lg bg-accent px-3 py-1 text-xs text-white disabled:opacity-50">
+                          {t("Update selected")}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+                {updateMsg && <p className="mt-2 text-xs text-soft">{updateMsg}</p>}
+              </div>
+            </div>
 
             <input
               value={query}

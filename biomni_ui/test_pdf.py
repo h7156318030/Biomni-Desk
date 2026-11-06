@@ -86,7 +86,7 @@ class ReadPdf(unittest.TestCase):
         self.assertIn("6 pages", web.read_webpage(self.srv.url + "/f.pdf", 2000))
 
     def test_query_terms_drop_filler_words(self):
-        self.assertEqual(web._terms("示例生物 最近 有什么 净亏损"), ["示例生物", "净亏损"])
+        self.assertEqual(web._terms("君赛生物 最近 有什么 净亏损"), ["君赛生物", "净亏损"])
 
 
 if __name__ == "__main__":

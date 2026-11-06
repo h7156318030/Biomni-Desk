@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import functools
 import json
+import os
 import threading
 from pathlib import Path
 from typing import Any, Callable
@@ -34,6 +35,12 @@ _group_of = {tool: g["id"] for g in GROUPS for tool in g["tools"]}
 _title = {g["id"]: g["title"] for g in GROUPS}
 
 
+def group_of(tool: str) -> str | None:
+    """The English title of the database connector that a tool belongs to, or None for tools that are not database calls."""
+    gid = _group_of.get(tool)
+    return _title.get(gid) if gid else None
+
+
 def _disabled() -> set[str]:
     """The ids of the connectors that are switched off, read from the store file (empty when there is none)."""
     try:
@@ -53,6 +60,11 @@ def off_message(tool: str) -> str:
     """What a switched-off tool returns instead of querying the database."""
     title = _title.get(_group_of.get(tool, ""), tool)
     return f"The database connector “{title}” is switched off in Settings, so it was not queried this time. Switch it on there when needed."
+
+
+def refusal_message(title: str) -> str:
+    """What a database call returns when the user did not allow it for this request."""
+    return f"The database “{title}” was not queried: the user did not allow it for this request. Carry on without it, or say what is missing."
 
 
 def listing() -> list[dict[str, Any]]:
@@ -81,6 +93,13 @@ def _guarded(name: str, fn: Callable[..., Any]) -> Callable[..., Any]:
     def inner(*args: Any, **kwargs: Any) -> Any:
         if not enabled(name):
             return off_message(name)
+        session = os.environ.get("BIOMNI_KERNEL_SESSION")
+        group = group_of(name)
+        if session is not None and group:  # inside a Python session: the task that owns it decides (see permissions.py)
+            from biomni_ui import permissions
+
+            if not session or not permissions.kernel_check(name, group, session):
+                return refusal_message(group)
         return fn(*args, **kwargs)
 
     inner._connector_guarded = True  # type: ignore[attr-defined]
