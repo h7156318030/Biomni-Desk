@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CopyButton, EventView, PlanView, ProcessGroup } from "@/components/events";
 import { LiveDraft, StepCards } from "@/components/steps";
+import { SkillDraftDialog } from "@/components/skill-draft";
 import { ResultsPanel } from "@/components/results-panel";
 import { ArtifactDetail } from "@/components/artifact-detail";
 import { ModePicker } from "@/components/mode-picker";
@@ -147,6 +148,8 @@ export default function Home() {
   const [liveDraft, setLiveDraft] = useState("");
   const [checking, setChecking] = useState(false); // the source check sent the answer back to the model: the old draft stays up until the revision streams in
   const [reviewing, setReviewing] = useState<string | null>(null);
+  const [skillFor, setSkillFor] = useState<string | null>(null);  // the finished task whose method is being saved as a skill
+  const [skillNote, setSkillNote] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [picked, setPicked] = useState<Mention[]>([]);
   const [menu, setMenu] = useState<{ start: number; query: string; trigger: "@" | "#" | "/" } | null>(null);
@@ -1076,6 +1079,7 @@ export default function Home() {
                       <EventView
                         ev={ev}
                         onReview={ev.type === "answer" && !live ? () => review(turn.id) : undefined}
+                        onSaveSkill={ev.type === "answer" && !live ? () => setSkillFor(turn.id) : undefined}
                         onRevise={ev.type === "review" && !live && isLast ? () => startTask(REVISE_PROMPT) : undefined}
                         reviewing={reviewing === turn.id}
                         hasReview={hasReview}
@@ -1097,6 +1101,21 @@ export default function Home() {
                       items
                     );
                   })}
+                  {skillFor === turn.id && (
+                    <SkillDraftDialog
+                      taskId={turn.id}
+                      onClose={() => setSkillFor(null)}
+                      onSaved={(id) => {
+                        setSkillFor(null);
+                        setSkillNote(`${turn.id}:${id}`);
+                      }}
+                    />
+                  )}
+                  {skillNote?.startsWith(`${turn.id}:`) && (
+                    <p role="status" className="mt-2 text-xs text-accent">
+                      {t("Saved to your skills: {name}", { name: skillNote.slice(turn.id.length + 1) })}
+                    </p>
+                  )}
                   {live && liveDraft && <LiveDraft text={liveDraft} />}
                   {live && (checking || !(liveDraft.includes("<solution>") && liveDraft.split("<solution>")[1].trim())) && (
                     <p role="status" aria-live="polite" className="flex items-center gap-2 text-sm text-soft">

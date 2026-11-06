@@ -207,8 +207,10 @@ SCHEMAS: list[dict[str, Any]] = [
 
 DB_MODULE = "biomni_ui.dbtools"
 DB_TOOLS = ["clinical_trials", "fda_adverse_events", "chembl_target_compounds", "open_targets", "target_tractability", "uniprot_lookup",
-            "gtex_expression", "gnomad_constraint", "geo_search", "string_interactions", "reactome_pathways"]
+            "gtex_expression", "gnomad_constraint", "geo_search", "string_interactions", "reactome_pathways",
+            "ensembl_gene", "pdb_structures", "alphafold_structure", "pubchem_compound", "openalex_works"]
 DB_PARAMS = {
+    "uniprot": "UniProt accession, e.g. 'P04637'", "name": "Compound name in English, e.g. 'aspirin'",
     "condition": "Disease or condition, e.g. 'beta thalassemia'", "intervention": "Drug or intervention words, e.g. 'gene therapy' (optional)",
     "status": "Registry status such as RECRUITING, COMPLETED (optional)", "drug": "Drug generic name in English, e.g. 'PEMBROLIZUMAB'",
     "target": "Gene or protein name, e.g. 'EGFR'", "query": "Gene symbol or disease name (for open_targets) / search words (uniprot, geo)",

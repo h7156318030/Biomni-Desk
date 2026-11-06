@@ -21,7 +21,7 @@ RULES: list[tuple[re.Pattern[str], str, str]] = [
      "tries to override the agent's own instructions"),
     (re.compile(r"\bsudo\b"), "high", "asks for administrator rights"),
     (re.compile(r"chmod\s+(-R\s+)?0?777\b"), "high", "makes files writable by everyone"),
-    (re.compile(r"\beval\s*\("), "medium", "evaluates text as code"),
+    (re.compile(r"(?<![\w.])eval\s*\("), "medium", "evaluates text as code"),  # not model.eval(), which is a normal method call
     (re.compile(r"\bos\.system\(|subprocess\.\w+\([^\n]*shell\s*=\s*True"), "medium", "runs a shell command from Python"),
     (re.compile(r"\bpip\s+install\b|\bnpm\s+install\s+-g\b"), "low", "installs packages"),
 ]

@@ -9,9 +9,10 @@
 - **Continue after a stop or a restart.** A task cut short keeps the work it had done; send "continue" in the same conversation to pick it up.
 - **Projects that remember.** Each project keeps a record of what its finished tasks did, and later tasks in that project get the relevant parts, even in a new conversation. You can also save notes for all projects or one project, and switch memory off per project.
 - **A community hub.** Search an index of community skills (about 950 from three GitHub sources) and curated tools, databases and software. Every skill is scanned before it is added; risky ones need your confirmation, and dangerous ones are never installed.
+- **Save a finished task as a skill.** Under an answer, a draft of its method becomes a reusable skill, which you review before it is saved.
 - **Choose the models for each job.** Pick the model and thinking strength for planning, sub-agents, the reviewer and pictures, separately from the main model.
 - **Sources you can check.** Each answer lists the pages and records it used.
-- **98 built-in skills and many bundled tools** for databases, literature and analysis (see the [skill catalogue](docs/SKILLS.md) and the [tool catalogue](docs/TOOLS.md)).
+- **98 built-in skills and many bundled tools** for databases (including Ensembl, PDB, AlphaFold DB, PubChem and OpenAlex), literature and analysis (see the [skill catalogue](docs/SKILLS.md) and the [tool catalogue](docs/TOOLS.md)).
 - **English and 中文** interface, switch in the bottom-left corner.
 
 **Documentation:** [product guide](docs/GUIDE.md) · [skills](docs/SKILLS.md) · [tools](docs/TOOLS.md) · [version notes](CHANGELOG.md)
@@ -79,9 +80,10 @@ Apache-2.0. See `LICENSE`. Biomni-Desk is built on [Biomni](https://github.com/s
 - **中断后可以继续。** 被打断或服务重启的任务会保留已做的工作；在同一对话里发送“继续”即可接着做。
 - **项目会记住做过什么。** 每个项目记录已完成任务做过的工作，之后的任务（即使在新对话里）会取到与其相关的部分。你也可以为所有项目或某个项目保存记住的事项，并按项目开关记忆。
 - **社区中心。** 搜索社区技能索引（来自三个 GitHub 来源，约 950 个）以及精选的工具、数据库和软件。每个技能添加前都会扫描：有风险的需要你确认，危险的一律不安装。
+- **把完成的任务存为技能。** 在答案下方，可把该任务的方法起草成可复用的技能；保存前由你审阅。
 - **为每类工作选择模型。** 规划、子智能体、审查和图片可分别选择模型和思考强度，与主模型互不影响。
 - **来源可核对。** 每个答案列出它用到的页面和记录。
-- **98 个内置技能，以及大量用于数据库、文献和分析的工具**（见[技能目录](docs/SKILLS.md)和[工具目录](docs/TOOLS.md)）。
+- **98 个内置技能，以及大量用于数据库（包括 Ensembl、PDB、AlphaFold DB、PubChem、OpenAlex）、文献和分析的工具**（见[技能目录](docs/SKILLS.md)和[工具目录](docs/TOOLS.md)）。
 - **界面支持中文和英文**，左下角可切换。
 
 **文档：** [产品指南](docs/GUIDE.md) · [技能](docs/SKILLS.md) · [工具](docs/TOOLS.md) · [版本说明](CHANGELOG.md)

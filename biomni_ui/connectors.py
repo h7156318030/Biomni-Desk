@@ -28,6 +28,10 @@ GROUPS: tuple[dict[str, Any], ...] = (
     {"id": "reactome", "title": "Reactome pathways", "tools": ("reactome_pathways",)},
     {"id": "literature", "title": "PubMed and Europe PMC literature", "tools": ("pubmed_search", "europepmc_search", "paper_abstracts")},
     {"id": "civic", "title": "CIViC tumour variants", "tools": ("civic_gene_variants",)},
+    {"id": "ensembl", "title": "Ensembl human gene records", "tools": ("ensembl_gene",)},
+    {"id": "pdb", "title": "PDB structures and AlphaFold DB predictions", "tools": ("pdb_structures", "alphafold_structure")},
+    {"id": "pubchem", "title": "PubChem compounds", "tools": ("pubchem_compound",)},
+    {"id": "openalex", "title": "OpenAlex scholarly works", "tools": ("openalex_works",)},
 )
 STORE = Path(__file__).resolve().parent.parent / "ui_data" / "connectors.json"
 _lock = threading.Lock()

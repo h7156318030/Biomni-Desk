@@ -178,6 +178,7 @@ export function AnswerCard({
   onReview,
   reviewing,
   hasReview,
+  onSaveSkill,
   onFork,
   vote = null,
   onVote,
@@ -192,6 +193,7 @@ export function AnswerCard({
   onReview?: () => void;
   reviewing?: boolean;
   hasReview?: boolean;
+  onSaveSkill?: () => void;
   onFork?: (text: string) => void;
   vote?: "up" | "down" | null;
   onVote?: (v: "up" | "down" | null) => void;
@@ -300,6 +302,11 @@ export function AnswerCard({
             className="rounded-md px-2 py-1 text-soft hover:bg-card hover:text-ink disabled:opacity-50"
           >
             ☑ {reviewing ? t("Reviewing…") : hasReview ? t("Reviewed") : t("Review")}
+          </button>
+        )}
+        {onSaveSkill && (
+          <button type="button" onClick={onSaveSkill} className="rounded-md px-2 py-1 text-soft hover:bg-card hover:text-ink">
+            ✦ {t("Save as a skill")}
           </button>
         )}
         <span className="mx-1 h-4 w-px bg-line" />

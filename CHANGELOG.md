@@ -1,6 +1,38 @@
 # Version notes · 版本说明
 
-**Version 2026.11.06** (tag `v2026.11.06`) — follows the release "Rename project to Biomni-Desk".
+## Version 2026.11.06.1 (tag `v2026.11.06.1`)
+
+### What is new
+
+- **Five more database tools**, checked against their live services: Ensembl (human gene records), PDB (experimental structures), AlphaFold DB (predicted structures with confidence), PubChem (compounds by name), and OpenAlex (scholarly works beyond PubMed). Each has its own switch under Settings → Databases. OpenAlex uses an optional personal key (`BIOMNI_OPENALEX_KEY`); without one it shares a small free daily budget.
+- **Save a finished task as a skill.** Under an answer, "Save as a skill" drafts a reusable run-book from that task: its method, with the specific gene or file replaced by placeholders. You read and edit it, then save it to your skills. Nothing is saved without your review.
+
+### Fixes
+
+- The scanner of the community hub no longer flags `model.eval()`, a normal method call.
+
+### How it was checked
+
+- 730 backend unit tests pass, including the new database tools (parsing, not-found and network errors, registry consistency), the skill drafting, and the scanner rules.
+- Live checks against the real services: all five new database tools returned data; the picture tool was tested with a free vision model and read a chart's title and axis label correctly; the planning model returned a plan and a clarifying question; resume was tested with a real backend restart in the middle of a task, and "continue" finished the task with the correct accessions; the skill-update check ran against GitHub.
+
+---
+
+## 版本 2026.11.06.1（标签 `v2026.11.06.1`）
+
+### 新增
+
+- **五个新的数据库工具**，均已对照其在线服务测试：Ensembl（人类基因记录）、PDB（实验结构）、AlphaFold DB（预测结构及置信度）、PubChem（按名称查化合物）、OpenAlex（PubMed 之外的学术文献）。每个都可以在 设置 → 数据库 中单独开关。OpenAlex 可选填个人密钥（环境变量 `BIOMNI_OPENALEX_KEY`）；不填时与网络上其他人共享一个很小的免费每日额度。
+- **把完成的任务存为技能。** 在答案下方点击“存为技能”，会把该任务的方法起草成可复用的操作说明，具体的基因或文件替换为占位符。你阅读并修改后保存到你的技能中。不经你审阅，不会保存任何东西。
+
+### 修复
+
+- 社区中心的扫描不再把 `model.eval()`（普通的方法调用）判为风险。
+
+### 验证情况
+
+- 后端单元测试 730 项全部通过，包括新增的数据库工具（解析、未找到和网络错误、注册表一致性）、技能起草和扫描规则。
+- 对真实服务的实际测试：五个新数据库工具均返回了数据；图片工具用一个免费视觉模型测试，正确读出了图表的标题和坐标轴标签；规划模型返回了计划和澄清问题；续接在真实重启后端的任务中途进行测试，发送“继续”后任务以正确的登录号完成；技能更新检查已对照 GitHub 运行。
 
 ---
 

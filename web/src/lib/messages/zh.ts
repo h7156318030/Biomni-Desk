@@ -854,6 +854,18 @@ export const zh: Record<string, string> = {
   "No licence file: check before using": "没有许可证文件，使用前请核对",
   "Licence unclear: read the repository's LICENSE file": "许可证不明确，请阅读仓库中的 LICENSE 文件",
   "Or browse the community library (curated skills, tools and databases) →": "或浏览社区库（精选的技能、工具和数据库）→",
+  // Save a finished task as a skill
+  "Save as a skill": "存为技能",
+  "The method of this task, written as a reusable skill. Check it and change anything before you save it.": "把这个任务的方法写成可复用的技能。保存前请检查并修改任何内容。",
+  "Drafting the skill…": "正在起草技能…",
+  "Name (the skill's id)": "名称（技能编号）",
+  "What it does": "作用",
+  "Field": "领域",
+  "When to use it": "何时使用",
+  "When not to use it": "何时不用",
+  "Steps": "步骤",
+  "Save to my skills": "保存到我的技能",
+  "Saved to your skills: {name}": "已保存到你的技能：{name}",
   // Community hub (search, scan, add)
   "Community hub": "社区中心",
   "Search community skills, tools, databases and software. Each skill is scanned before it is added; nothing is installed without your choice.": "搜索社区的技能、工具、数据库和软件。每个技能添加前都会扫描；没有你的选择，不会安装任何东西。",

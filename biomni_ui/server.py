@@ -2038,6 +2038,21 @@ def review_task(task_id: str):
     return manager.add_event(task_id, {"type": "review", "text": text})
 
 
+@app.post("/api/tasks/{task_id}/skill-draft")
+def skill_draft(task_id: str):
+    """A reusable skill drafted from this finished task: its method, generalised. Nothing is saved until the user reviews it."""
+    task, events, earlier = _finished_task(task_id)
+    code = [e.get("code", "") for e in events if e.get("type") == "code" and e.get("code")]
+    answer = next((e.get("text", "") for e in events if e.get("type") == "answer"), "")
+    llm = _llm()
+    try:
+        return assist.draft_skill(llm, task["prompt"], code, answer)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Drafting the skill failed: {type(e).__name__}: {e}") from e
+
+
 @app.post("/api/tasks/{task_id}/suggest")
 def suggest_task(task_id: str):
     task, events, earlier = _finished_task(task_id)

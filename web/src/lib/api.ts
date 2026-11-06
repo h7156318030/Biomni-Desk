@@ -96,6 +96,9 @@ export const createTask = (
 export const cancelTask = (id: string) => send<{ ok: boolean }>("POST", `/api/tasks/${id}/cancel`);
 export const reviewTask = (id: string) => send<AgentEvent>("POST", `/api/tasks/${id}/review`);
 export const suggestTask = (id: string) => send<AgentEvent>("POST", `/api/tasks/${id}/suggest`);
+/** A reusable skill drafted from a finished task. It is saved only after the user reviews it (createSkill). */
+export const skillDraft = (id: string) =>
+  send<{ title: string; description: string; category: string; when_to_use: string; avoid: string; body: string }>("POST", `/api/tasks/${id}/skill-draft`);
 export const fileUrl = (path: string) => `${API}/api/files?p=${encodeURIComponent(path)}`;
 
 const TERMINAL = new Set(["done", "error", "cancelled"]);

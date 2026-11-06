@@ -912,7 +912,8 @@ def expand_batches(output: list[dict[str, Any]]) -> list[dict[str, Any]]:
 # The fast database and literature functions (1-3 s each): offered as direct tools, so they run in the same batch as web_search.
 DIRECT_NAMES = ("clinical_trials", "fda_adverse_events", "chembl_target_compounds", "open_targets", "target_tractability", "uniprot_lookup",
                 "gtex_expression", "gnomad_constraint", "geo_search", "string_interactions", "reactome_pathways",
-                "pubmed_search", "europepmc_search", "paper_abstracts", "civic_gene_variants")
+                "pubmed_search", "europepmc_search", "paper_abstracts", "civic_gene_variants",
+                "ensembl_gene", "pdb_structures", "alphafold_structure", "pubchem_compound", "openalex_works")
 
 
 # Words in a question that call for each direct tool. A tool is offered only when the question names its kind of data (the rest are

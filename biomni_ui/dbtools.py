@@ -251,5 +251,95 @@ def reactome_pathways(gene_or_term: str, max_results: int = 10) -> str:
     return "\n".join(rows[:max_results]) or f"Reactome found nothing: {gene_or_term}"
 
 
+# ---- Ensembl, PDB, AlphaFold DB, PubChem, OpenAlex (added in version 2026.11.06) -------------------------------
+
+def ensembl_gene(gene: str) -> str:
+    """Human gene in Ensembl (GRCh38): Ensembl ID, symbol, biotype, position, canonical transcript and description."""
+    try:
+        d = lit._json(f"https://rest.ensembl.org/lookup/symbol/homo_sapiens/{gene.strip()}", params={"content-type": "application/json"})
+    except Exception as e:
+        return _fail("Ensembl ", e)
+    strand = "+" if d.get("strand") == 1 else "-"
+    return (f"{d.get('id')} | {d.get('display_name')} | {d.get('biotype')} | chr{d.get('seq_region_name')}:{d.get('start')}-{d.get('end')} ({strand}) "
+            f"| canonical {d.get('canonical_transcript')} | {d.get('description', '')}")
+
+
+def pdb_structures(query: str, max_results: int = 5) -> str:
+    """Experimental structures in the PDB that match a gene, protein or term: PDB ID | title | method | resolution (A)."""
+    body = {"query": {"type": "terminal", "service": "full_text", "parameters": {"value": query}}, "return_type": "entry",
+            "request_options": {"paginate": {"start": 0, "rows": max_results}}}
+    try:
+        data = _post("https://search.rcsb.org/rcsbsearch/v2/query", body)
+    except Exception as e:
+        if "404" in str(e):  # the search service answers 404 when nothing matches
+            return f"PDB found no structure for: {query}"
+        return _fail("PDB ", e)
+    rows = []
+    for hit in data.get("result_set", [])[:max_results]:
+        pid = hit.get("identifier")
+        try:
+            e = lit._json(f"https://data.rcsb.org/rest/v1/core/entry/{pid}")
+        except Exception:
+            rows.append(f"{pid} | (details unavailable)")
+            continue
+        title = (e.get("struct") or {}).get("title", "")
+        method = ((e.get("exptl") or [{}])[0]).get("method", "")
+        res = ((e.get("rcsb_entry_info") or {}).get("resolution_combined") or [None])[0]
+        rows.append(f"{pid} | {title} | {method} | {res if res is not None else 'n/a'}")
+    return "\n".join(rows) or f"PDB found no structure for: {query}"
+
+
+def alphafold_structure(uniprot: str) -> str:
+    """AlphaFold DB prediction for one UniProt accession: model ID, mean pLDDT (confidence, 0-100), created date and the structure file."""
+    try:
+        data = lit._json(f"https://alphafold.ebi.ac.uk/api/prediction/{uniprot.strip()}")
+    except Exception as e:
+        if "404" in str(e):
+            return f"AlphaFold DB has no prediction for {uniprot}"
+        return _fail("AlphaFold ", e)
+    if not data:
+        return f"AlphaFold DB has no prediction for {uniprot}"
+    row = data[0]
+    return (f"{row.get('modelEntityId')} | mean pLDDT {row.get('globalMetricValue')} | created {str(row.get('modelCreatedDate', ''))[:10]} "
+            f"| {row.get('pdbUrl')}")
+
+
+def pubchem_compound(name: str) -> str:
+    """PubChem compound by English name: CID | molecular formula | molecular weight | IUPAC name | SMILES."""
+    from urllib.parse import quote
+
+    url = (f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{quote(name.strip())}"
+           "/property/MolecularFormula,MolecularWeight,IUPACName,ConnectivitySMILES/JSON")
+    try:
+        props = lit._json(url)["PropertyTable"]["Properties"]
+    except Exception as e:
+        if "404" in str(e):
+            return f"PubChem found no compound named: {name}"
+        return _fail("PubChem ", e)
+    rows = [f"{p.get('CID')} | {p.get('MolecularFormula')} | {p.get('MolecularWeight')} | {p.get('IUPACName', '')} | {p.get('ConnectivitySMILES', '')}"
+            for p in props[:3]]
+    return "\n".join(rows) or f"PubChem found no compound named: {name}"
+
+
+def openalex_works(query: str, max_results: int = 8) -> str:
+    """OpenAlex scholarly works (broad coverage beyond PubMed, including preprints): year | title | DOI | venue."""
+    import os
+
+    params: dict[str, Any] = {"search": query, "per-page": max(1, min(int(max_results), 25)),
+                              "select": "display_name,publication_year,doi,primary_location"}
+    key = os.environ.get("BIOMNI_OPENALEX_KEY", "").strip()  # optional: a personal key has its own daily budget
+    if key:
+        params["api_key"] = key
+    try:
+        data = lit._json("https://api.openalex.org/works", params=params)
+    except Exception as e:
+        return _fail("OpenAlex ", e)
+    rows = []
+    for w in data.get("results", []):
+        venue = (((w.get("primary_location") or {}).get("source")) or {}).get("display_name", "")
+        rows.append(f"{w.get('publication_year')} | {w.get('display_name', '')} | {w.get('doi') or 'no DOI'} | {venue}")
+    return "\n".join(rows) or f"OpenAlex found no works for: {query}"
+
+
 from biomni_ui import connectors as _connectors  # noqa: E402
 _connectors.guard(globals())  # the switch of each database connector is checked on every call

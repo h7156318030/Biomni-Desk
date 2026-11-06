@@ -104,3 +104,33 @@ def parse_suggestions(raw: str) -> list[str]:
 
 def suggest(llm, prompt: str, events: list[dict[str, Any]], earlier=None) -> list[str]:
     return parse_suggestions(_ask(llm, SUGGEST_SYSTEM, transcript(prompt, events, earlier)))
+
+
+SKILL_SYSTEM = """You turn one finished research task into a reusable skill: a short run-book the agent follows for similar questions. Write in the language of the user's question.
+Generalise: replace the specific gene, file, number or name of the task with a clear placeholder, and say where it goes. Keep the working code as short templates. Do not include the answer's results, personal data, file paths of the user, or sources the task did not use. Do not invent APIs the task did not call.
+Output only one JSON object with these keys: "title" (short, lowercase, hyphens), "description" (one sentence: what it does and for which questions), "category" (one word), "when_to_use" (when this applies), "avoid" (when not to use it), "body" (markdown: numbered steps; each step names the tool or function and what to check)."""
+
+SKILL_KEYS = ("title", "description", "category", "when_to_use", "avoid", "body")
+
+
+def parse_skill(raw: str) -> dict[str, str]:
+    """The draft skill from the model's reply. Raises ValueError when the reply has no usable skill."""
+    m = re.search(r"\{.*\}", raw, re.DOTALL)
+    if not m:
+        raise ValueError("The model did not return a skill draft.")
+    try:
+        data = json.loads(m.group(0))
+    except json.JSONDecodeError as e:
+        raise ValueError("The skill draft was not readable JSON.") from e
+    out = {k: " ".join(str(data.get(k, "")).split()) if k != "body" else str(data.get(k, "")).strip() for k in SKILL_KEYS}
+    if not out["title"] or not out["body"]:
+        raise ValueError("The skill draft has no title or no steps.")
+    out["title"] = re.sub(r"[^a-z0-9]+", "-", out["title"].lower()).strip("-")[:48] or "skill-draft"
+    return out
+
+
+def draft_skill(llm, prompt: str, code_steps: list[str], answer: str) -> dict[str, str]:
+    """A reusable skill drafted from one finished task (the user reviews and saves it)."""
+    user = (f"Task:\n{prompt[:1500]}\n\nCode the agent ran, in order:\n" + "\n\n".join(c[:1200] for c in code_steps[:8])
+            + f"\n\nThe answer it gave:\n{answer[:1200]}")
+    return parse_skill(_ask(llm, SKILL_SYSTEM, user))

@@ -179,6 +179,7 @@ export function EventView({
   onReview,
   reviewing,
   hasReview,
+  onSaveSkill,
   ledger = [],
   turnId = "",
   onFork,
@@ -193,6 +194,7 @@ export function EventView({
   onReview?: () => void;
   reviewing?: boolean;
   hasReview?: boolean;
+  onSaveSkill?: () => void;
   turnId?: string;
   onFork?: (text: string) => void;
   vote?: "up" | "down" | null;
@@ -282,6 +284,7 @@ export function EventView({
           onReview={onReview}
           reviewing={reviewing}
           hasReview={hasReview}
+          onSaveSkill={onSaveSkill}
         />
       );
     case "review":
